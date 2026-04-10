@@ -87,7 +87,12 @@ create policy "Members manage entries" on sleep_entries
 
 <!-- ===== SCREEN: LOADING ===== -->
 <div id="screen-loading" class="fixed inset-0 flex items-center justify-center bg-slate-50">
-  <div class="spinner"></div>
+  <div class="text-center px-6">
+    <div class="spinner mx-auto mb-4"></div>
+    <p id="loading-error" class="hidden text-sm text-red-600 max-w-xs">
+      Kunne ikke koble til databasen. Sjekk at du har kjørt SQL-oppsettet i Supabase.
+    </p>
+  </div>
 </div>
 
 <!-- ===== SCREEN: AUTH ===== -->
@@ -670,7 +675,16 @@ create policy "Members manage entries" on sleep_entries
   });
 
   async function bootstrap() {
-    children = await loadChildren();
+    try {
+      children = await loadChildren();
+    } catch (err) {
+      const el = document.getElementById('loading-error');
+      if (el) {
+        el.textContent = 'Kunne ikke koble til databasen. Sjekk at du har kjørt SQL-oppsettet i Supabase. (' + err.message + ')';
+        el.classList.remove('hidden');
+      }
+      return;
+    }
     if (children.length === 0) {
       renderLang();
       renderUserAvatar();
@@ -730,9 +744,10 @@ create policy "Members manage entries" on sleep_entries
   }
 
   async function loadChildren() {
-    const { data } = await sb.from('child_members')
+    const { data, error } = await sb.from('child_members')
       .select('child_id, children(id, name, share_code)')
       .eq('user_id', user.id);
+    if (error) throw error;
     return (data || []).map(r => r.children).filter(Boolean);
   }
 
