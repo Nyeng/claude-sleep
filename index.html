@@ -24,7 +24,7 @@
     .hidden { display: none !important; }
   </style>
 </head>
-<body class="bg-slate-50 min-h-screen">
+<body class="min-h-screen" style="background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #eef2ff 100%);">
 
 <!--
 -- Run this in Supabase SQL Editor (full reset — replaces old schema)
@@ -96,8 +96,8 @@ create policy "Members manage entries" on sleep_entries
 </div>
 
 <!-- ===== SCREEN: AUTH ===== -->
-<div id="screen-auth" class="hidden fixed inset-0 flex items-center justify-center bg-slate-50 p-4">
-  <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 w-full max-w-sm text-center">
+<div id="screen-auth" class="hidden fixed inset-0 flex items-center justify-center p-4" style="background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 60%, #ede9fe 100%);">
+  <div class="bg-white rounded-3xl p-8 w-full max-w-sm text-center" style="box-shadow: 0 8px 40px rgba(99,102,241,0.12)">
     <!-- Language toggle -->
     <div class="flex justify-end mb-6">
       <button
@@ -108,8 +108,8 @@ create policy "Members manage entries" on sleep_entries
     </div>
 
     <!-- Title -->
-    <div class="mb-6">
-      <div class="text-3xl mb-1">🌙</div>
+    <div class="mb-8">
+      <div class="text-5xl mb-3">🌙</div>
       <h1 class="text-2xl font-bold text-slate-800" id="auth-title"></h1>
       <p class="text-sm text-slate-400 mt-1">Basert på <a href="https://www.helse-bergen.no/nasjonal-kompetansetjeneste-for-sovnsykdommer-sovno/sovndagbok-sovno" target="_blank" rel="noopener" class="underline hover:text-slate-600">søvndagbok fra Helse Bergen</a></p>
     </div>
@@ -117,7 +117,8 @@ create policy "Members manage entries" on sleep_entries
     <!-- Google sign in -->
     <button
       onclick="signInWithGoogle()"
-      class="w-full flex items-center justify-center gap-3 border border-slate-200 bg-white rounded-xl py-3 px-4 font-medium text-slate-700 hover:bg-slate-50 transition shadow-sm"
+      class="w-full flex items-center justify-center gap-3 border border-slate-200 bg-white rounded-xl py-3.5 px-4 font-medium text-slate-700 hover:bg-slate-50 transition"
+      style="box-shadow: 0 1px 4px rgba(0,0,0,0.08);"
     >
       <svg width="20" height="20" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M47.532 24.552c0-1.636-.132-3.2-.388-4.704H24.48v8.898h12.944c-.556 3.01-2.242 5.562-4.782 7.278v6.048h7.742c4.532-4.176 7.148-10.326 7.148-17.52z" fill="#4285F4"/>
@@ -198,53 +199,38 @@ create policy "Members manage entries" on sleep_entries
 <!-- ===== SCREEN: APP ===== -->
 <div id="screen-app" class="hidden">
   <!-- Header -->
-  <header class="bg-white border-b border-slate-100 sticky top-0 z-10">
+  <header class="sticky top-0 z-10" style="background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%); box-shadow: 0 2px 12px rgba(79,70,229,0.18);">
     <div class="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
-      <h1 class="text-lg font-bold text-slate-800" id="app-title"></h1>
+      <h1 class="text-lg font-bold text-white" id="app-title"></h1>
       <!-- Child badge (center) -->
       <div class="absolute left-1/2 -translate-x-1/2">
         <button
           id="child-badge"
           onclick="cycleChild()"
-          class="bg-indigo-600 text-white text-xs font-semibold px-3 py-1 rounded-full transition hover:bg-indigo-700"
+          class="text-white text-xs font-semibold px-3 py-1 rounded-full transition"
+          style="background: rgba(255,255,255,0.2); backdrop-filter: blur(4px);"
           title="Bytt barn / Switch child"
         ></button>
       </div>
       <div class="flex items-center gap-2">
-        <!-- Lang toggle -->
         <button
           id="app-lang-btn"
           onclick="toggleLang()"
-          class="text-xs font-semibold px-2.5 py-1 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition"
+          class="text-xs font-semibold px-2.5 py-1 rounded-lg text-white/80 hover:text-white transition"
+          style="border: 1px solid rgba(255,255,255,0.3);"
         ></button>
-        <!-- Avatar -->
-        <img id="user-avatar" src="" alt="" class="w-8 h-8 rounded-full border border-slate-200 object-cover hidden" />
-        <div id="user-avatar-fallback" class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs font-bold hidden"></div>
+        <img id="user-avatar" src="" alt="" class="w-8 h-8 rounded-full border-2 border-white/40 object-cover hidden" />
+        <div id="user-avatar-fallback" class="w-8 h-8 rounded-full flex items-center justify-center text-indigo-700 text-xs font-bold hidden" style="background: rgba(255,255,255,0.9);"></div>
       </div>
     </div>
   </header>
 
   <!-- Tabs -->
-  <div class="bg-white border-b border-slate-100 sticky top-[57px] z-10">
+  <div class="bg-white border-b border-slate-200 sticky top-[57px] z-10">
     <div class="max-w-lg mx-auto px-4 flex">
-      <button
-        id="tab-new-btn"
-        onclick="switchTab('new')"
-        class="tab-btn flex-1 py-3 text-sm font-semibold border-b-2 transition"
-        data-tab="new"
-      ></button>
-      <button
-        id="tab-history-btn"
-        onclick="switchTab('history')"
-        class="tab-btn flex-1 py-3 text-sm font-semibold border-b-2 transition"
-        data-tab="history"
-      ></button>
-      <button
-        id="tab-settings-btn"
-        onclick="switchTab('settings')"
-        class="tab-btn flex-1 py-3 text-sm font-semibold border-b-2 transition"
-        data-tab="settings"
-      ></button>
+      <button id="tab-new-btn" onclick="switchTab('new')" class="tab-btn flex-1 py-3 text-sm font-semibold border-b-2 transition" data-tab="new"></button>
+      <button id="tab-history-btn" onclick="switchTab('history')" class="tab-btn flex-1 py-3 text-sm font-semibold border-b-2 transition" data-tab="history"></button>
+      <button id="tab-settings-btn" onclick="switchTab('settings')" class="tab-btn flex-1 py-3 text-sm font-semibold border-b-2 transition" data-tab="settings"></button>
     </div>
   </div>
 
@@ -266,7 +252,8 @@ create policy "Members manage entries" on sleep_entries
         </div>
 
         <!-- SECTION: Before bedtime -->
-        <div class="mb-2 mt-5 px-1">
+        <div class="mb-2 mt-5 px-1 flex items-center gap-2">
+          <div class="w-0.5 h-4 bg-indigo-400 rounded-full"></div>
           <p class="text-xs uppercase tracking-wide text-slate-400 font-semibold" id="section-before"></p>
         </div>
 
@@ -311,7 +298,8 @@ create policy "Members manage entries" on sleep_entries
         </div>
 
         <!-- SECTION: Morning -->
-        <div class="mb-2 mt-5 px-1">
+        <div class="mb-2 mt-5 px-1 flex items-center gap-2">
+          <div class="w-0.5 h-4 bg-indigo-400 rounded-full"></div>
           <p class="text-xs uppercase tracking-wide text-slate-400 font-semibold" id="section-morning"></p>
         </div>
 
@@ -1112,15 +1100,17 @@ create policy "Members manage entries" on sleep_entries
       const id   = `${name}-${val}`;
       const wrap = document.createElement('label');
       wrap.htmlFor   = id;
-      wrap.className = 'flex items-center gap-1.5 text-sm text-slate-600 cursor-pointer bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 hover:bg-indigo-50 hover:border-indigo-300 transition';
+      const isChecked = checkedVal === val;
+      wrap.className = `flex items-center gap-1.5 text-sm cursor-pointer border rounded-lg px-3 py-2 transition ${isChecked ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-indigo-50 hover:border-indigo-300'}`;
 
       const radio = document.createElement('input');
       radio.type      = 'radio';
       radio.name      = name;
       radio.id        = id;
       radio.value     = val;
-      radio.className = 'accent-indigo-600';
+      radio.className = 'sr-only';
       if (checkedVal === val) radio.checked = true;
+      radio.onchange = () => renderRadioGroup(containerId, name, options);
 
       const span = document.createElement('span');
       span.textContent = label;
@@ -1149,7 +1139,10 @@ create policy "Members manage entries" on sleep_entries
     const tx = t();
     entries.forEach(entry => {
       const card = document.createElement('div');
-      card.className = 'bg-white rounded-2xl shadow-sm border border-slate-100 p-5';
+      const q10Colors = ['#ef4444','#f97316','#eab308','#22c55e','#6366f1'];
+      const borderColor = entry.q10 ? q10Colors[entry.q10 - 1] : '#e2e8f0';
+      card.className = 'bg-white rounded-2xl shadow-sm border border-slate-100 p-5 overflow-hidden relative';
+      card.style.borderLeft = `4px solid ${borderColor}`;
 
       const dateHeading = document.createElement('p');
       dateHeading.className = 'font-semibold text-slate-800 mb-3 capitalize';
