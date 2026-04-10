@@ -442,8 +442,8 @@ create policy "Members manage entries" on sleep_entries
             ></button>
           </div>
           <p class="text-xs text-slate-400 mt-2" id="share-code-hint"></p>
-          <p id="member-count" class="text-xs text-slate-500 mt-1"></p>
           <p id="code-copied" class="text-xs text-green-600 mt-1 hidden"></p>
+          <div id="members-list" class="mt-3 space-y-2"></div>
         </div>
       </div>
 
@@ -572,7 +572,7 @@ create policy "Members manage entries" on sleep_entries
       createBtn:          'Opprett',
       joinBtn:            'Bli med',
       shareCodeLabel:     'Delingskode',
-      shareCodeHint:      'Del denne koden med den andre forelderen',
+      shareCodeHint:      'Del denne koden med den andre foresatte',
       copyCode:           'Kopier',
       addChildBtn:        'Legg til barn',
       thisChild:          'Dette barnet',
@@ -806,11 +806,24 @@ create policy "Members manage entries" on sleep_entries
     showFeedback('code-copied', lang === 'no' ? 'Kopiert!' : 'Copied!');
   }
 
-  async function loadMemberCount() {
-    const { count } = await sb.from('child_members')
-      .select('*', { count: 'exact', head: true })
-      .eq('child_id', currentChild.id);
-    return count || 1;
+  async function loadMembers() {
+    const { data } = await sb.rpc('get_child_members', { p_child_id: currentChild.id });
+    return (typeof data === 'string' ? JSON.parse(data) : data) || [];
+  }
+
+  function renderMembersList(members) {
+    const container = document.getElementById('members-list');
+    if (!container) return;
+    container.innerHTML = '';
+    members.forEach(m => {
+      const row = document.createElement('div');
+      row.className = 'flex items-center gap-2';
+      const img = m.avatar
+        ? `<img src="${m.avatar}" class="w-6 h-6 rounded-full object-cover" />`
+        : `<div class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 text-xs flex items-center justify-center font-semibold">${(m.name || m.email || '?').charAt(0).toUpperCase()}</div>`;
+      row.innerHTML = `${img}<span class="text-sm text-slate-700">${m.name || m.email}</span>`;
+      container.appendChild(row);
+    });
   }
 
   // ============================================================
@@ -955,13 +968,8 @@ create policy "Members manage entries" on sleep_entries
       if (codeEl) codeEl.textContent = currentChild?.share_code || '';
       // Children list (only if >1)
       renderSettingsChildrenList();
-      // Member count
-      loadMemberCount().then(count => {
-        const el = document.getElementById('member-count');
-        if (el) el.textContent = lang === 'no'
-          ? `${count} forelder${count === 1 ? '' : 'e'} har tilgang`
-          : `${count} parent${count === 1 ? '' : 's'} have access`;
-      });
+      // Members list
+      loadMembers().then(renderMembersList);
     }
   }
 
