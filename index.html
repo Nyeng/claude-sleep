@@ -5,543 +5,989 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Søvndagbok</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
-    .tab-active { @apply border-b-2 border-indigo-600 text-indigo-600 font-semibold; }
-    input[type="time"], input[type="number"], input[type="text"], textarea {
-      font-size: 16px; /* prevent iOS zoom */
+    /* Prevent iOS input zoom */
+    input, select, textarea { font-size: 16px !important; }
+
+    /* Loading spinner */
+    .spinner {
+      width: 40px; height: 40px;
+      border: 4px solid #e0e7ff;
+      border-top-color: #4f46e5;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
     }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Hide utility */
+    .hidden { display: none !important; }
   </style>
 </head>
-<body class="bg-slate-50 min-h-screen text-slate-800">
+<body class="bg-slate-50 min-h-screen">
 
-  <div class="max-w-lg mx-auto px-4 py-6">
+<!--
+  ============================================================
+  SUPABASE SQL SETUP — run this in your Supabase SQL editor
+  ============================================================
 
-    <!-- Header -->
-    <div class="flex items-center justify-between mb-6">
-      <div>
-        <h1 class="text-2xl font-bold text-indigo-700" id="app-title">Søvndagbok</h1>
-        <p class="text-sm text-slate-500 mt-0.5" id="app-subtitle">Bjørn Bjørvatn · Helse Bergen</p>
-      </div>
+  create table profiles (
+    id uuid references auth.users on delete cascade primary key,
+    child_name text default '',
+    updated_at timestamptz default now()
+  );
+
+  create table sleep_entries (
+    id uuid default gen_random_uuid() primary key,
+    user_id uuid references auth.users on delete cascade not null,
+    date date not null,
+    q1 smallint,
+    nap boolean,
+    nap_times text,
+    medication text,
+    time_in_bed text,
+    time_sleep_attempt text,
+    sleep_onset int,
+    awakenings_count int,
+    wake_time int,
+    final_awakening text,
+    got_up text,
+    q10 smallint,
+    created_at timestamptz default now(),
+    updated_at timestamptz default now(),
+    unique(user_id, date)
+  );
+
+  alter table profiles enable row level security;
+  alter table sleep_entries enable row level security;
+
+  create policy "Users own profile" on profiles
+    for all using (auth.uid() = id) with check (auth.uid() = id);
+
+  create policy "Users own entries" on sleep_entries
+    for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+  create or replace function public.handle_new_user()
+  returns trigger as $$
+  begin
+    insert into public.profiles (id) values (new.id) on conflict do nothing;
+    return new;
+  end;
+  $$ language plpgsql security definer;
+
+  create trigger on_auth_user_created
+    after insert on auth.users
+    for each row execute procedure public.handle_new_user();
+
+  ============================================================
+-->
+
+<!-- ===== SCREEN: LOADING ===== -->
+<div id="screen-loading" class="fixed inset-0 flex items-center justify-center bg-slate-50">
+  <div class="spinner"></div>
+</div>
+
+<!-- ===== SCREEN: AUTH ===== -->
+<div id="screen-auth" class="hidden fixed inset-0 flex items-center justify-center bg-slate-50 p-4">
+  <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 w-full max-w-sm text-center">
+    <!-- Language toggle -->
+    <div class="flex justify-end mb-6">
       <button
-        id="lang-toggle"
+        id="auth-lang-btn"
         onclick="toggleLang()"
-        class="text-sm border border-slate-300 rounded-full px-3 py-1 hover:bg-slate-100 transition"
-      >EN</button>
-    </div>
-
-    <!-- Tabs -->
-    <div class="flex gap-6 border-b border-slate-200 mb-6">
-      <button
-        id="tab-new"
-        onclick="showTab('new')"
-        class="pb-2 text-sm tab-active"
-      ></button>
-      <button
-        id="tab-history"
-        onclick="showTab('history')"
-        class="pb-2 text-sm text-slate-500 hover:text-slate-700 transition"
+        class="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition"
       ></button>
     </div>
 
-    <!-- New Entry Form -->
-    <div id="view-new">
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4">
-        <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1" id="lbl-date"></label>
-        <input
-          type="date"
-          id="entry-date"
-          class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
-        />
+    <!-- Title -->
+    <div class="mb-6">
+      <div class="text-3xl mb-1">🌙</div>
+      <h1 class="text-2xl font-bold text-slate-800" id="auth-title"></h1>
+      <p class="text-sm text-slate-400 mt-1">Bjørn Bjørvatn · Helse Bergen</p>
+    </div>
+
+    <!-- Google sign in -->
+    <button
+      onclick="signInWithGoogle()"
+      class="w-full flex items-center justify-center gap-3 border border-slate-200 bg-white rounded-xl py-3 px-4 font-medium text-slate-700 hover:bg-slate-50 transition shadow-sm"
+    >
+      <svg width="20" height="20" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M47.532 24.552c0-1.636-.132-3.2-.388-4.704H24.48v8.898h12.944c-.556 3.01-2.242 5.562-4.782 7.278v6.048h7.742c4.532-4.176 7.148-10.326 7.148-17.52z" fill="#4285F4"/>
+        <path d="M24.48 48c6.492 0 11.942-2.154 15.922-5.83l-7.742-6.048c-2.148 1.44-4.896 2.29-8.18 2.29-6.294 0-11.622-4.252-13.524-9.972H2.952v6.248C6.912 42.854 15.12 48 24.48 48z" fill="#34A853"/>
+        <path d="M10.956 28.44A14.396 14.396 0 0 1 10.13 24c0-1.544.268-3.048.826-4.44v-6.248H2.952A23.978 23.978 0 0 0 .48 24c0 3.876.926 7.546 2.472 10.688l8.004-6.248z" fill="#FBBC05"/>
+        <path d="M24.48 9.584c3.546 0 6.73 1.218 9.234 3.612l6.918-6.918C36.41 2.388 30.962 0 24.48 0 15.12 0 6.912 5.146 2.952 13.312l8.004 6.248c1.902-5.72 7.23-9.976 13.524-9.976z" fill="#EA4335"/>
+      </svg>
+      <span id="auth-google-btn-text"></span>
+    </button>
+  </div>
+</div>
+
+<!-- ===== SCREEN: APP ===== -->
+<div id="screen-app" class="hidden">
+  <!-- Header -->
+  <header class="bg-white border-b border-slate-100 sticky top-0 z-10">
+    <div class="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
+      <h1 class="text-lg font-bold text-slate-800" id="app-title"></h1>
+      <div class="flex items-center gap-2">
+        <!-- Lang toggle -->
+        <button
+          id="app-lang-btn"
+          onclick="toggleLang()"
+          class="text-xs font-semibold px-2.5 py-1 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition"
+        ></button>
+        <!-- Avatar -->
+        <img id="user-avatar" src="" alt="" class="w-8 h-8 rounded-full border border-slate-200 object-cover hidden" />
+        <div id="user-avatar-fallback" class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs font-bold hidden"></div>
+        <!-- Logout -->
+        <button onclick="signOut()" class="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition" title="Sign out">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h6a2 2 0 012 2v1" />
+          </svg>
+        </button>
       </div>
+    </div>
+  </header>
 
-      <!-- Before bedtime note -->
-      <p class="text-xs text-slate-400 uppercase tracking-wide font-semibold mb-3 px-1" id="lbl-before-bed"></p>
-
-      <!-- Q1: Daytime functioning -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-3" id="q1-card">
-        <p class="font-medium mb-3 text-sm" id="q1-label"></p>
-        <div class="flex gap-2 flex-wrap" id="q1-options"></div>
-      </div>
-
-      <!-- Q2: Naps -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-3">
-        <p class="font-medium mb-3 text-sm" id="q2-label"></p>
-        <div class="flex gap-3 mb-3">
-          <label class="flex items-center gap-2 text-sm cursor-pointer">
-            <input type="radio" name="nap" value="yes" onchange="toggleNaps(true)" class="accent-indigo-600" />
-            <span id="lbl-yes"></span>
-          </label>
-          <label class="flex items-center gap-2 text-sm cursor-pointer">
-            <input type="radio" name="nap" value="no" onchange="toggleNaps(false)" checked class="accent-indigo-600" />
-            <span id="lbl-no"></span>
-          </label>
-        </div>
-        <div id="nap-details" class="hidden">
-          <label class="text-xs text-slate-500 mb-1 block" id="lbl-nap-times"></label>
-          <textarea
-            id="nap-times"
-            rows="2"
-            class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
-          ></textarea>
-        </div>
-      </div>
-
-      <!-- Q3: Medication (optional) -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-3">
-        <p class="font-medium mb-1 text-sm" id="q3-label"></p>
-        <p class="text-xs text-slate-400 mb-3" id="q3-optional"></p>
-        <input
-          type="text"
-          id="medication"
-          class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
-        />
-      </div>
-
-      <!-- Morning note -->
-      <p class="text-xs text-slate-400 uppercase tracking-wide font-semibold mb-3 mt-5 px-1" id="lbl-morning"></p>
-
-      <!-- Q4: Bedtime -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-3">
-        <p class="font-medium mb-3 text-sm" id="q4-label"></p>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="text-xs text-slate-500 mb-1 block" id="lbl-in-bed"></label>
-            <input type="time" id="time-in-bed" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
-          </div>
-          <div>
-            <label class="text-xs text-slate-500 mb-1 block" id="lbl-sleep-attempt"></label>
-            <input type="time" id="time-sleep-attempt" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
-          </div>
-        </div>
-      </div>
-
-      <!-- Q5: Sleep onset -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-3">
-        <p class="font-medium mb-3 text-sm" id="q5-label"></p>
-        <div class="flex items-center gap-2">
-          <input type="number" id="sleep-onset" min="0" max="300"
-            class="w-24 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
-          <span class="text-sm text-slate-500" id="lbl-min"></span>
-        </div>
-      </div>
-
-      <!-- Q6: Awakenings count -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-3">
-        <p class="font-medium mb-3 text-sm" id="q6-label"></p>
-        <input type="number" id="awakenings-count" min="0" max="30"
-          class="w-24 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
-      </div>
-
-      <!-- Q7: Total wake time -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-3">
-        <p class="font-medium mb-3 text-sm" id="q7-label"></p>
-        <div class="flex items-center gap-2">
-          <input type="number" id="wake-time" min="0" max="600"
-            class="w-24 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
-          <span class="text-sm text-slate-500" id="lbl-min2"></span>
-        </div>
-      </div>
-
-      <!-- Q8: Final awakening -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-3">
-        <p class="font-medium mb-3 text-sm" id="q8-label"></p>
-        <input type="time" id="final-awakening" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
-      </div>
-
-      <!-- Q9: Got up -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-3">
-        <p class="font-medium mb-3 text-sm" id="q9-label"></p>
-        <input type="time" id="got-up" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
-      </div>
-
-      <!-- Q10: Sleep quality -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-6" id="q10-card">
-        <p class="font-medium mb-3 text-sm" id="q10-label"></p>
-        <div class="flex gap-2 flex-wrap" id="q10-options"></div>
-      </div>
-
+  <!-- Tabs -->
+  <div class="bg-white border-b border-slate-100 sticky top-[57px] z-10">
+    <div class="max-w-lg mx-auto px-4 flex">
       <button
-        onclick="saveEntry()"
-        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition text-sm"
-        id="btn-save"
+        id="tab-new-btn"
+        onclick="switchTab('new')"
+        class="tab-btn flex-1 py-3 text-sm font-semibold border-b-2 transition"
+        data-tab="new"
       ></button>
-
-      <p id="save-feedback" class="text-center text-sm text-green-600 mt-3 hidden"></p>
+      <button
+        id="tab-history-btn"
+        onclick="switchTab('history')"
+        class="tab-btn flex-1 py-3 text-sm font-semibold border-b-2 transition"
+        data-tab="history"
+      ></button>
+      <button
+        id="tab-settings-btn"
+        onclick="switchTab('settings')"
+        class="tab-btn flex-1 py-3 text-sm font-semibold border-b-2 transition"
+        data-tab="settings"
+      ></button>
     </div>
-
-    <!-- History View -->
-    <div id="view-history" class="hidden">
-      <div id="history-empty" class="text-center text-slate-400 text-sm py-12 hidden">
-        <p id="lbl-no-entries"></p>
-      </div>
-      <div id="history-list" class="space-y-3"></div>
-    </div>
-
   </div>
 
-  <script>
-    // ─── Language strings ────────────────────────────────────────────────────
-    const strings = {
-      no: {
-        appTitle: "Søvndagbok",
-        appSubtitle: "Bjørn Bjørvatn · Helse Bergen",
-        tabNew: "Ny registrering",
-        tabHistory: "Historikk",
-        lblDate: "Dato",
-        beforeBed: "Fylles ut før leggetid",
-        morning: "Fylles ut om morgenen",
-        q1: "1. Hvordan har barnet fungert på dagtid?",
-        q1Scale: ["1 – Svært bra", "2 – Bra", "3 – Middels", "4 – Dårlig", "5 – Svært dårlig"],
-        q2: "2. Tok barnet én eller flere hvileblunder i løpet av dagen?",
-        yes: "Ja",
-        no: "Nei",
-        napTimes: "Angi tidspunkter for blundene",
-        q3: "3. Tok barnet søvnmedisin?",
-        q3Optional: "Valgfritt – noter medisin og dose",
-        q4: "4. Hvilket klokkeslett gikk barnet til sengs?",
-        inBed: "La seg",
-        sleepAttempt: "Prøvde å sove",
-        q5: "5. Hvor lang tid tok det før barnet sovnet?",
-        q6: "6. Hvor mange ganger våknet barnet i løpet av natten?",
-        q7: "7. Hvor lenge var barnet våkent totalt under nattlige oppvåkninger?",
-        q8: "8. Når våknet barnet opp om morgenen uten å sovne igjen?",
-        q9: "9. Når stod barnet opp?",
-        q10: "10. Hvordan var siste natts søvn totalt sett?",
-        q10Scale: ["1 – Svært lett", "2 – Lett", "3 – Middels", "4 – Dyp", "5 – Svært dyp"],
-        min: "minutter",
-        save: "Lagre",
-        saved: "Lagret!",
-        noEntries: "Ingen registreringer ennå.",
-        deleteConfirm: "Slett denne registreringen?",
-        delete: "Slett",
-        naps: "Blunder",
-        medication: "Medisin",
-        bedtime: "Leggetid",
-        onset: "Innsovningstid",
-        awakenings: "Oppvåkninger",
-        wakeTime: "Våkentid",
-        finalWake: "Endelig oppvåkning",
-        gotUp: "Stod opp",
-        quality: "Søvnkvalitet",
-        functioning: "Dagtidsfunksjon",
-        edit: "Rediger",
-      },
-      en: {
-        appTitle: "Sleep Diary",
-        appSubtitle: "Bjørn Bjørvatn · Helse Bergen",
-        tabNew: "New entry",
-        tabHistory: "History",
-        lblDate: "Date",
-        beforeBed: "Fill out before bedtime",
-        morning: "Fill out in the morning",
-        q1: "1. How did your child function during the day?",
-        q1Scale: ["1 – Very good", "2 – Good", "3 – Moderate", "4 – Poor", "5 – Very poor"],
-        q2: "2. Did your child take one or more naps during the day?",
-        yes: "Yes",
-        no: "No",
-        napTimes: "Note the times of the naps",
-        q3: "3. Did your child take any sleep medication?",
-        q3Optional: "Optional – note medication and dose",
-        q4: "4. What time did your child go to bed?",
-        inBed: "In bed",
-        sleepAttempt: "Tried to sleep",
-        q5: "5. How long did it take for your child to fall asleep?",
-        q6: "6. How many times did your child wake up during the night?",
-        q7: "7. How long was your child awake in total during nighttime awakenings?",
-        q8: "8. When did your child wake up for the last time in the morning?",
-        q9: "9. When did your child get up?",
-        q10: "10. How was last night's sleep overall?",
-        q10Scale: ["1 – Very light", "2 – Light", "3 – Moderate", "4 – Deep", "5 – Very deep"],
-        min: "minutes",
-        save: "Save",
-        saved: "Saved!",
-        noEntries: "No entries yet.",
-        deleteConfirm: "Delete this entry?",
-        delete: "Delete",
-        naps: "Naps",
-        medication: "Medication",
-        bedtime: "Bedtime",
-        onset: "Sleep onset",
-        awakenings: "Awakenings",
-        wakeTime: "Wake time",
-        finalWake: "Final awakening",
-        gotUp: "Got up",
-        quality: "Sleep quality",
-        functioning: "Daytime functioning",
-        edit: "Edit",
-      }
-    };
+  <!-- Tab content -->
+  <main class="max-w-lg mx-auto px-4 py-6">
 
-    // ─── State ───────────────────────────────────────────────────────────────
-    let lang = localStorage.getItem('sovn-lang') || 'no';
-    let currentTab = 'new';
-    let editingDate = null;
+    <!-- ===== TAB: NEW ENTRY ===== -->
+    <div id="tab-new" class="tab-panel">
+      <form id="entry-form" onsubmit="handleSaveEntry(event)">
+        <!-- Date -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4">
+          <label class="block text-xs uppercase tracking-wide text-slate-400 font-semibold mb-2" id="label-date"></label>
+          <input
+            type="date"
+            id="entry-date"
+            class="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            required
+          />
+        </div>
 
-    // ─── Init ────────────────────────────────────────────────────────────────
-    document.addEventListener('DOMContentLoaded', () => {
-      setTodayDate();
-      renderLang();
-    });
+        <!-- SECTION: Before bedtime -->
+        <div class="mb-2 mt-5 px-1">
+          <p class="text-xs uppercase tracking-wide text-slate-400 font-semibold" id="section-before"></p>
+        </div>
 
-    function setTodayDate() {
-      const today = new Date().toISOString().split('T')[0];
-      document.getElementById('entry-date').value = today;
-    }
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4 space-y-5">
+          <!-- Q1: Daytime functioning -->
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-2" id="label-q1"></label>
+            <div class="flex flex-wrap gap-2" id="q1-radios"></div>
+          </div>
 
-    // ─── Language ────────────────────────────────────────────────────────────
-    function toggleLang() {
-      lang = lang === 'no' ? 'en' : 'no';
-      localStorage.setItem('sovn-lang', lang);
-      renderLang();
-    }
-
-    function t(key) {
-      return strings[lang][key];
-    }
-
-    function renderLang() {
-      const s = strings[lang];
-      document.getElementById('lang-toggle').textContent = lang === 'no' ? 'EN' : 'NO';
-      document.getElementById('app-title').textContent = s.appTitle;
-      document.getElementById('app-subtitle').textContent = s.appSubtitle;
-      document.getElementById('tab-new').textContent = s.tabNew;
-      document.getElementById('tab-history').textContent = s.tabHistory;
-      document.getElementById('lbl-date').textContent = s.lblDate;
-      document.getElementById('lbl-before-bed').textContent = s.beforeBed;
-      document.getElementById('lbl-morning').textContent = s.morning;
-      document.getElementById('q1-label').textContent = s.q1;
-      document.getElementById('q2-label').textContent = s.q2;
-      document.getElementById('lbl-yes').textContent = s.yes;
-      document.getElementById('lbl-no').textContent = s.no;
-      document.getElementById('lbl-nap-times').textContent = s.napTimes;
-      document.getElementById('q3-label').textContent = s.q3;
-      document.getElementById('q3-optional').textContent = s.q3Optional;
-      document.getElementById('q4-label').textContent = s.q4;
-      document.getElementById('lbl-in-bed').textContent = s.inBed;
-      document.getElementById('lbl-sleep-attempt').textContent = s.sleepAttempt;
-      document.getElementById('q5-label').textContent = s.q5;
-      document.getElementById('lbl-min').textContent = s.min;
-      document.getElementById('q6-label').textContent = s.q6;
-      document.getElementById('q7-label').textContent = s.q7;
-      document.getElementById('lbl-min2').textContent = s.min;
-      document.getElementById('q8-label').textContent = s.q8;
-      document.getElementById('q9-label').textContent = s.q9;
-      document.getElementById('q10-label').textContent = s.q10;
-      document.getElementById('btn-save').textContent = s.save;
-      document.getElementById('lbl-no-entries').textContent = s.noEntries;
-
-      // Scale buttons Q1
-      renderScale('q1-options', 'q1', 5, s.q1Scale);
-      // Scale buttons Q10
-      renderScale('q10-options', 'q10', 5, s.q10Scale);
-
-      if (currentTab === 'history') renderHistory();
-    }
-
-    function renderScale(containerId, name, count, labels) {
-      const container = document.getElementById(containerId);
-      const current = container.querySelector('input:checked')?.value;
-      container.innerHTML = '';
-      for (let i = 1; i <= count; i++) {
-        const id = `${name}-${i}`;
-        const label = document.createElement('label');
-        label.className = 'flex items-center gap-1.5 text-sm cursor-pointer bg-slate-50 hover:bg-indigo-50 border border-slate-200 rounded-lg px-3 py-2 transition';
-        label.innerHTML = `
-          <input type="radio" name="${name}" value="${i}" id="${id}"
-            class="accent-indigo-600" ${current == i ? 'checked' : ''} />
-          <span>${labels[i-1]}</span>
-        `;
-        container.appendChild(label);
-      }
-    }
-
-    // ─── Nap toggle ──────────────────────────────────────────────────────────
-    function toggleNaps(show) {
-      document.getElementById('nap-details').classList.toggle('hidden', !show);
-    }
-
-    // ─── Tab switching ───────────────────────────────────────────────────────
-    function showTab(tab) {
-      currentTab = tab;
-      document.getElementById('view-new').classList.toggle('hidden', tab !== 'new');
-      document.getElementById('view-history').classList.toggle('hidden', tab !== 'history');
-
-      const tabNew = document.getElementById('tab-new');
-      const tabHist = document.getElementById('tab-history');
-      tabNew.className = tab === 'new'
-        ? 'pb-2 text-sm tab-active'
-        : 'pb-2 text-sm text-slate-500 hover:text-slate-700 transition';
-      tabHist.className = tab === 'history'
-        ? 'pb-2 text-sm tab-active'
-        : 'pb-2 text-sm text-slate-500 hover:text-slate-700 transition';
-
-      if (tab === 'history') renderHistory();
-    }
-
-    // ─── Save ────────────────────────────────────────────────────────────────
-    function getFormData() {
-      return {
-        date: document.getElementById('entry-date').value,
-        q1: document.querySelector('input[name="q1"]:checked')?.value || '',
-        q2: document.querySelector('input[name="nap"]:checked')?.value || 'no',
-        napTimes: document.getElementById('nap-times').value.trim(),
-        medication: document.getElementById('medication').value.trim(),
-        timeInBed: document.getElementById('time-in-bed').value,
-        timeSleepAttempt: document.getElementById('time-sleep-attempt').value,
-        sleepOnset: document.getElementById('sleep-onset').value,
-        awakeningsCount: document.getElementById('awakenings-count').value,
-        wakeTime: document.getElementById('wake-time').value,
-        finalAwakening: document.getElementById('final-awakening').value,
-        gotUp: document.getElementById('got-up').value,
-        q10: document.querySelector('input[name="q10"]:checked')?.value || '',
-      };
-    }
-
-    function setFormData(entry) {
-      document.getElementById('entry-date').value = entry.date || '';
-      // Q1
-      if (entry.q1) {
-        const el = document.querySelector(`input[name="q1"][value="${entry.q1}"]`);
-        if (el) el.checked = true;
-      }
-      // Q2
-      const napVal = entry.q2 || 'no';
-      document.querySelector(`input[name="nap"][value="${napVal}"]`).checked = true;
-      toggleNaps(napVal === 'yes');
-      document.getElementById('nap-times').value = entry.napTimes || '';
-      document.getElementById('medication').value = entry.medication || '';
-      document.getElementById('time-in-bed').value = entry.timeInBed || '';
-      document.getElementById('time-sleep-attempt').value = entry.timeSleepAttempt || '';
-      document.getElementById('sleep-onset').value = entry.sleepOnset || '';
-      document.getElementById('awakenings-count').value = entry.awakeningsCount || '';
-      document.getElementById('wake-time').value = entry.wakeTime || '';
-      document.getElementById('final-awakening').value = entry.finalAwakening || '';
-      document.getElementById('got-up').value = entry.gotUp || '';
-      // Q10
-      if (entry.q10) {
-        const el = document.querySelector(`input[name="q10"][value="${entry.q10}"]`);
-        if (el) el.checked = true;
-      }
-    }
-
-    function saveEntry() {
-      const data = getFormData();
-      if (!data.date) {
-        alert(lang === 'no' ? 'Angi dato.' : 'Please enter a date.');
-        return;
-      }
-
-      const entries = getEntries();
-      const idx = entries.findIndex(e => e.date === data.date);
-      if (idx >= 0) {
-        entries[idx] = data;
-      } else {
-        entries.unshift(data);
-      }
-      entries.sort((a, b) => b.date.localeCompare(a.date));
-      localStorage.setItem('sovn-entries', JSON.stringify(entries));
-
-      const fb = document.getElementById('save-feedback');
-      fb.textContent = t('saved');
-      fb.classList.remove('hidden');
-      setTimeout(() => fb.classList.add('hidden'), 2500);
-      editingDate = null;
-    }
-
-    // ─── History ─────────────────────────────────────────────────────────────
-    function getEntries() {
-      try {
-        return JSON.parse(localStorage.getItem('sovn-entries') || '[]');
-      } catch { return []; }
-    }
-
-    function renderHistory() {
-      const entries = getEntries();
-      const list = document.getElementById('history-list');
-      const empty = document.getElementById('history-empty');
-      list.innerHTML = '';
-
-      if (entries.length === 0) {
-        empty.classList.remove('hidden');
-        return;
-      }
-      empty.classList.add('hidden');
-
-      const s = strings[lang];
-      entries.forEach(entry => {
-        const card = document.createElement('div');
-        card.className = 'bg-white rounded-2xl shadow-sm border border-slate-100 p-5';
-
-        const dateStr = formatDate(entry.date);
-        const rows = buildSummaryRows(entry, s);
-
-        card.innerHTML = `
-          <div class="flex items-center justify-between mb-3">
-            <span class="font-semibold text-indigo-700">${dateStr}</span>
-            <div class="flex gap-2">
-              <button onclick="editEntry('${entry.date}')"
-                class="text-xs border border-slate-200 rounded-lg px-2.5 py-1 hover:bg-slate-50 transition text-slate-600">
-                ${s.edit}
-              </button>
-              <button onclick="deleteEntry('${entry.date}')"
-                class="text-xs border border-red-100 rounded-lg px-2.5 py-1 hover:bg-red-50 transition text-red-500">
-                ${s.delete}
-              </button>
+          <!-- Q2: Naps -->
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-2" id="label-q2"></label>
+            <div class="flex gap-4 mb-2">
+              <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+                <input type="radio" name="nap" value="yes" id="nap-yes" onchange="toggleNapTimes()" class="accent-indigo-600" />
+                <span id="label-yes"></span>
+              </label>
+              <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+                <input type="radio" name="nap" value="no" id="nap-no" onchange="toggleNapTimes()" class="accent-indigo-600" />
+                <span id="label-no"></span>
+              </label>
+            </div>
+            <div id="nap-times-wrap" class="hidden">
+              <textarea
+                id="nap-times"
+                rows="2"
+                class="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
+              ></textarea>
             </div>
           </div>
-          <div class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
-            ${rows}
+
+          <!-- Q3: Medication (optional) -->
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-2" id="label-q3"></label>
+            <input
+              type="text"
+              id="medication"
+              class="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            />
           </div>
-        `;
-        list.appendChild(card);
-      });
+        </div>
+
+        <!-- SECTION: Morning -->
+        <div class="mb-2 mt-5 px-1">
+          <p class="text-xs uppercase tracking-wide text-slate-400 font-semibold" id="section-morning"></p>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4 space-y-5">
+          <!-- Q4: Bedtime (two times side by side) -->
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-2" id="label-q4"></label>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <p class="text-xs text-slate-400 mb-1" id="label-in-bed"></p>
+                <input
+                  type="time"
+                  id="time-in-bed"
+                  class="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                />
+              </div>
+              <div>
+                <p class="text-xs text-slate-400 mb-1" id="label-sleep-attempt"></p>
+                <input
+                  type="time"
+                  id="time-sleep-attempt"
+                  class="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Q5: Time to fall asleep -->
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-2" id="label-q5"></label>
+            <div class="flex items-center gap-2">
+              <input
+                type="number"
+                id="sleep-onset"
+                min="0"
+                max="999"
+                class="w-24 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              />
+              <span class="text-sm text-slate-500" id="label-minutes-1"></span>
+            </div>
+          </div>
+
+          <!-- Q6: Number of awakenings -->
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-2" id="label-q6"></label>
+            <input
+              type="number"
+              id="awakenings-count"
+              min="0"
+              max="99"
+              class="w-24 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            />
+          </div>
+
+          <!-- Q7: Total wake time -->
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-2" id="label-q7"></label>
+            <div class="flex items-center gap-2">
+              <input
+                type="number"
+                id="wake-time"
+                min="0"
+                max="999"
+                class="w-24 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              />
+              <span class="text-sm text-slate-500" id="label-minutes-2"></span>
+            </div>
+          </div>
+
+          <!-- Q8: Final morning awakening -->
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-2" id="label-q8"></label>
+            <input
+              type="time"
+              id="final-awakening"
+              class="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            />
+          </div>
+
+          <!-- Q9: Got up time -->
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-2" id="label-q9"></label>
+            <input
+              type="time"
+              id="got-up"
+              class="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            />
+          </div>
+
+          <!-- Q10: Sleep quality -->
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-2" id="label-q10"></label>
+            <div class="flex flex-wrap gap-2" id="q10-radios"></div>
+          </div>
+        </div>
+
+        <!-- Save button -->
+        <button
+          type="submit"
+          class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition mt-2"
+          id="btn-save-entry"
+        ></button>
+        <p id="entry-feedback" class="text-center text-sm text-green-600 mt-2 hidden"></p>
+      </form>
+    </div>
+
+    <!-- ===== TAB: HISTORY ===== -->
+    <div id="tab-history" class="tab-panel hidden">
+      <div id="history-list" class="space-y-4"></div>
+      <p id="history-empty" class="text-center text-slate-400 text-sm py-10 hidden"></p>
+    </div>
+
+    <!-- ===== TAB: SETTINGS ===== -->
+    <div id="tab-settings" class="tab-panel hidden">
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4 space-y-4">
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-slate-400 font-semibold mb-2" id="label-child-name"></label>
+          <input
+            type="text"
+            id="child-name-input"
+            class="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+          />
+        </div>
+        <button
+          onclick="saveProfile()"
+          class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition"
+          id="btn-save-profile"
+        ></button>
+        <p id="profile-feedback" class="text-center text-sm text-green-600 hidden"></p>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4">
+        <p class="text-xs uppercase tracking-wide text-slate-400 font-semibold mb-1" id="label-account"></p>
+        <p id="user-email" class="text-sm text-slate-400"></p>
+      </div>
+
+      <button
+        onclick="signOut()"
+        class="w-full bg-red-50 hover:bg-red-100 text-red-600 font-semibold py-3 rounded-xl border border-red-100 transition"
+        id="btn-sign-out"
+      ></button>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  // ============================================================
+  // CONFIG — replace with your actual Supabase project values
+  // ============================================================
+  const SUPABASE_URL  = 'https://xdbveygpgzrxpowomdqi.supabase.co';
+  const SUPABASE_ANON = 'sb_publishable_vGsYHC4BkhPx1ofIySftjg_QXRUtnGX';
+
+  // ============================================================
+  // CLIENT
+  // ============================================================
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+  // ============================================================
+  // STATE
+  // ============================================================
+  let user       = null;
+  let childName  = '';
+  let lang       = localStorage.getItem('sovn-lang') || 'no';
+  let currentTab = 'new';
+  let entries    = [];
+
+  // ============================================================
+  // TRANSLATIONS
+  // ============================================================
+  const T = {
+    no: {
+      appTitle:          'Søvndagbok',
+      authTitle:         'Søvndagbok',
+      signInGoogle:      'Logg inn med Google',
+      langSwitch:        'EN',
+      tabNew:            'Ny registrering',
+      tabHistory:        'Historikk',
+      tabSettings:       'Innstillinger',
+      labelDate:         'Dato',
+      sectionBefore:     'Fylles ut før leggetid',
+      sectionMorning:    'Fylles ut om morgenen',
+      q1:                (name) => `Hvordan har ${name} fungert på dagtid?`,
+      q1Scale:           ['1 – Svært bra', '2 – Bra', '3 – Middels', '4 – Dårlig', '5 – Svært dårlig'],
+      q2:                (name) => `Har ${name} sovet på dagtid?`,
+      q2NapTimes:        'Oppgi tidspunkt og varighet',
+      q3:                (name) => `Medikament gitt til ${name} (valgfritt)`,
+      q4:                (name) => `Når la du ${name}?`,
+      labelInBed:        'La seg',
+      labelSleepAttempt: 'Prøvde å sove',
+      q5:                (name) => `Hvor lang tid brukte ${name} på å sovne?`,
+      minutes:           'minutter',
+      q6:                (name) => `Hvor mange ganger våknet ${name} i løpet av natten?`,
+      q7:                (name) => `Hvor lenge var ${name} våken totalt ved nattlige oppvåkninger?`,
+      q8:                (name) => `Når våknet ${name} endelig om morgenen?`,
+      q9:                (name) => `Når stod ${name} opp?`,
+      q10:               (name) => `Hvordan vurderer du søvnkvaliteten til ${name}?`,
+      q10Scale:          ['1 – Svært lett', '2 – Lett', '3 – Middels', '4 – Dyp', '5 – Svært dyp'],
+      yes:               'Ja',
+      no_:               'Nei',
+      saveEntry:         'Lagre registrering',
+      entrySaved:        'Registrering lagret!',
+      childNameLabel:    'Barnets kallenavn',
+      saveProfile:       'Lagre',
+      profileSaved:      'Lagret!',
+      accountLabel:      'Konto',
+      signOut:           'Logg ut',
+      editBtn:           'Rediger',
+      deleteBtn:         'Slett',
+      historyEmpty:      'Ingen registreringer enda.',
+      fallbackChild:     'barnet',
+      confirmDelete:     'Slett denne registreringen?',
+      fieldNap:          'Dagsøvn',
+      fieldNapTimes:     'Tidspunkt dagsøvn',
+      fieldMed:          'Medikament',
+      fieldInBed:        'La seg',
+      fieldSleepAttempt: 'Prøvde å sove',
+      fieldOnset:        'Innsovningstid',
+      fieldAwakenings:   'Oppvåkninger',
+      fieldWakeTime:     'Våken tid natt',
+      fieldFinalWake:    'Siste oppvåkning',
+      fieldGotUp:        'Stod opp',
+      fieldQ1:           'Dagtidsfungering',
+      fieldQ10:          'Søvnkvalitet',
+      minutesSuffix:     ' min',
+    },
+    en: {
+      appTitle:          'Sleep Diary',
+      authTitle:         'Sleep Diary',
+      signInGoogle:      'Sign in with Google',
+      langSwitch:        'NO',
+      tabNew:            'New entry',
+      tabHistory:        'History',
+      tabSettings:       'Settings',
+      labelDate:         'Date',
+      sectionBefore:     'Fill out before bedtime',
+      sectionMorning:    'Fill out in the morning',
+      q1:                (name) => `How did ${name} function during the day?`,
+      q1Scale:           ['1 – Very good', '2 – Good', '3 – Moderate', '4 – Poor', '5 – Very poor'],
+      q2:                (name) => `Did ${name} nap during the day?`,
+      q2NapTimes:        'Enter times and duration',
+      q3:                (name) => `Medication given to ${name} (optional)`,
+      q4:                (name) => `When did you put ${name} to bed?`,
+      labelInBed:        'In bed',
+      labelSleepAttempt: 'Tried to sleep',
+      q5:                (name) => `How long did it take ${name} to fall asleep?`,
+      minutes:           'minutes',
+      q6:                (name) => `How many times did ${name} wake up during the night?`,
+      q7:                (name) => `How long was ${name} awake in total during nighttime awakenings?`,
+      q8:                (name) => `When did ${name} wake up for good in the morning?`,
+      q9:                (name) => `When did ${name} get up?`,
+      q10:               (name) => `How do you rate ${name}'s sleep quality?`,
+      q10Scale:          ['1 – Very light', '2 – Light', '3 – Moderate', '4 – Deep', '5 – Very deep'],
+      yes:               'Yes',
+      no_:               'No',
+      saveEntry:         'Save entry',
+      entrySaved:        'Entry saved!',
+      childNameLabel:    "Child's nickname",
+      saveProfile:       'Save',
+      profileSaved:      'Saved!',
+      accountLabel:      'Account',
+      signOut:           'Sign out',
+      editBtn:           'Edit',
+      deleteBtn:         'Delete',
+      historyEmpty:      'No entries yet.',
+      fallbackChild:     'your child',
+      confirmDelete:     'Delete this entry?',
+      fieldNap:          'Nap',
+      fieldNapTimes:     'Nap times',
+      fieldMed:          'Medication',
+      fieldInBed:        'In bed',
+      fieldSleepAttempt: 'Tried to sleep',
+      fieldOnset:        'Sleep onset',
+      fieldAwakenings:   'Awakenings',
+      fieldWakeTime:     'Awake time (night)',
+      fieldFinalWake:    'Final awakening',
+      fieldGotUp:        'Got up',
+      fieldQ1:           'Daytime functioning',
+      fieldQ10:          'Sleep quality',
+      minutesSuffix:     ' min',
+    }
+  };
+
+  function t()      { return T[lang]; }
+  function getName() { return childName || t().fallbackChild; }
+
+  // ============================================================
+  // INIT
+  // ============================================================
+  document.addEventListener('DOMContentLoaded', async () => {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session) {
+      user = session.user;
+      await bootstrap();
+    } else {
+      showScreen('auth');
+      renderLang();
     }
 
-    function buildSummaryRows(entry, s) {
-      const rows = [];
-      const add = (label, value) => {
-        if (value !== '' && value !== null && value !== undefined) {
-          rows.push(`<span class="text-slate-400">${label}</span><span class="text-slate-700">${value}</span>`);
-        }
-      };
+    sb.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        user = session.user;
+        await bootstrap();
+      } else if (event === 'SIGNED_OUT') {
+        user        = null;
+        childName   = '';
+        entries     = [];
+        showScreen('auth');
+        renderLang();
+      }
+    });
+  });
 
-      if (entry.q1) add(s.functioning, s.q1Scale[parseInt(entry.q1) - 1]);
-      if (entry.q2 === 'yes') add(s.naps, entry.napTimes || s.yes);
-      if (entry.medication) add(s.medication, entry.medication);
-      if (entry.timeInBed) add(s.bedtime, entry.timeInBed + (entry.timeSleepAttempt ? ' → ' + entry.timeSleepAttempt : ''));
-      if (entry.sleepOnset) add(s.onset, entry.sleepOnset + ' ' + s.min);
-      if (entry.awakeningsCount) add(s.awakenings, entry.awakeningsCount);
-      if (entry.wakeTime) add(s.wakeTime, entry.wakeTime + ' ' + s.min);
-      if (entry.finalAwakening) add(s.finalWake, entry.finalAwakening);
-      if (entry.gotUp) add(s.gotUp, entry.gotUp);
-      if (entry.q10) add(s.quality, s.q10Scale[parseInt(entry.q10) - 1]);
+  async function bootstrap() {
+    await Promise.all([loadProfile(), loadEntries()]);
+    setTodayDate();
+    renderLang();
+    renderUserAvatar();
+    showScreen('app');
+    switchTab('new');
+  }
 
-      return rows.join('');
+  // ============================================================
+  // SCREENS
+  // ============================================================
+  function showScreen(name) {
+    ['loading', 'auth', 'app'].forEach(s => {
+      document.getElementById(`screen-${s}`).classList.toggle('hidden', s !== name);
+    });
+  }
+
+  // ============================================================
+  // AUTH
+  // ============================================================
+  async function signInWithGoogle() {
+    await sb.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin }
+    });
+  }
+
+  async function signOut() {
+    await sb.auth.signOut();
+  }
+
+  // ============================================================
+  // PROFILE
+  // ============================================================
+  async function loadProfile() {
+    if (!user) return;
+    const { data } = await sb
+      .from('profiles')
+      .select('child_name')
+      .eq('id', user.id)
+      .single();
+    if (data) childName = data.child_name || '';
+  }
+
+  async function saveProfile() {
+    const newName = document.getElementById('child-name-input').value.trim();
+    const { error } = await sb
+      .from('profiles')
+      .upsert({ id: user.id, child_name: newName, updated_at: new Date().toISOString() });
+    if (!error) {
+      childName = newName;
+      renderLang();
+      showFeedback('profile-feedback', t().profileSaved);
     }
+  }
 
-    function formatDate(dateStr) {
-      if (!dateStr) return '';
-      const d = new Date(dateStr + 'T12:00:00');
-      return d.toLocaleDateString(lang === 'no' ? 'nb-NO' : 'en-GB', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-      });
+  // ============================================================
+  // ENTRIES
+  // ============================================================
+  async function loadEntries() {
+    if (!user) return;
+    const { data, error } = await sb
+      .from('sleep_entries')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('date', { ascending: false });
+    if (!error && data) entries = data;
+  }
+
+  async function handleSaveEntry(e) {
+    e.preventDefault();
+    const date   = document.getElementById('entry-date').value;
+    const napVal = document.querySelector('input[name="nap"]:checked');
+    const nap    = napVal ? napVal.value === 'yes' : null;
+
+    const q1El  = document.querySelector('input[name="q1"]:checked');
+    const q10El = document.querySelector('input[name="q10"]:checked');
+
+    const payload = {
+      user_id:             user.id,
+      date:                date,
+      q1:                  q1El  ? parseInt(q1El.value)  : null,
+      nap:                 nap,
+      nap_times:           nap === true ? (document.getElementById('nap-times').value.trim() || null) : null,
+      medication:          document.getElementById('medication').value.trim() || null,
+      time_in_bed:         document.getElementById('time-in-bed').value || null,
+      time_sleep_attempt:  document.getElementById('time-sleep-attempt').value || null,
+      sleep_onset:         intOrNull('sleep-onset'),
+      awakenings_count:    intOrNull('awakenings-count'),
+      wake_time:           intOrNull('wake-time'),
+      final_awakening:     document.getElementById('final-awakening').value || null,
+      got_up:              document.getElementById('got-up').value || null,
+      q10:                 q10El ? parseInt(q10El.value) : null,
+      updated_at:          new Date().toISOString(),
+    };
+
+    const { data, error } = await sb
+      .from('sleep_entries')
+      .upsert(payload, { onConflict: 'user_id,date' })
+      .select()
+      .single();
+
+    if (!error && data) {
+      const idx = entries.findIndex(en => en.date === date);
+      if (idx >= 0) entries[idx] = data;
+      else entries.unshift(data);
+      entries.sort((a, b) => b.date.localeCompare(a.date));
+      showFeedback('entry-feedback', t().entrySaved);
     }
+  }
 
-    function deleteEntry(date) {
-      if (!confirm(t('deleteConfirm'))) return;
-      const entries = getEntries().filter(e => e.date !== date);
-      localStorage.setItem('sovn-entries', JSON.stringify(entries));
+  async function deleteEntry(date) {
+    if (!confirm(t().confirmDelete)) return;
+    const { error } = await sb
+      .from('sleep_entries')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('date', date);
+    if (!error) {
+      entries = entries.filter(en => en.date !== date);
       renderHistory();
     }
+  }
 
-    function editEntry(date) {
-      const entry = getEntries().find(e => e.date === date);
-      if (!entry) return;
-      editingDate = date;
-      setFormData(entry);
-      showTab('new');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+  function editEntry(date) {
+    const entry = entries.find(en => en.date === date);
+    if (!entry) return;
+
+    document.getElementById('entry-date').value = entry.date;
+
+    // Q1 radios
+    document.querySelectorAll('input[name="q1"]').forEach(r => {
+      r.checked = parseInt(r.value) === entry.q1;
+    });
+
+    // Q2 nap
+    if (entry.nap !== null && entry.nap !== undefined) {
+      document.getElementById(entry.nap ? 'nap-yes' : 'nap-no').checked = true;
+      document.getElementById('nap-times-wrap').classList.toggle('hidden', !entry.nap);
+    } else {
+      document.querySelectorAll('input[name="nap"]').forEach(r => r.checked = false);
+      document.getElementById('nap-times-wrap').classList.add('hidden');
     }
-  </script>
+    document.getElementById('nap-times').value = entry.nap_times || '';
+
+    // Q3
+    document.getElementById('medication').value = entry.medication || '';
+
+    // Q4
+    document.getElementById('time-in-bed').value        = entry.time_in_bed || '';
+    document.getElementById('time-sleep-attempt').value = entry.time_sleep_attempt || '';
+
+    // Q5–Q7
+    document.getElementById('sleep-onset').value      = entry.sleep_onset != null ? entry.sleep_onset : '';
+    document.getElementById('awakenings-count').value = entry.awakenings_count != null ? entry.awakenings_count : '';
+    document.getElementById('wake-time').value        = entry.wake_time != null ? entry.wake_time : '';
+
+    // Q8–Q9
+    document.getElementById('final-awakening').value = entry.final_awakening || '';
+    document.getElementById('got-up').value          = entry.got_up || '';
+
+    // Q10 radios
+    document.querySelectorAll('input[name="q10"]').forEach(r => {
+      r.checked = parseInt(r.value) === entry.q10;
+    });
+
+    switchTab('new');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // ============================================================
+  // TABS
+  // ============================================================
+  function switchTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+    document.getElementById(`tab-${tab}`).classList.remove('hidden');
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      const active = btn.dataset.tab === tab;
+      btn.classList.toggle('border-indigo-600', active);
+      btn.classList.toggle('text-indigo-600', active);
+      btn.classList.toggle('border-transparent', !active);
+      btn.classList.toggle('text-slate-400', !active);
+    });
+    if (tab === 'history') renderHistory();
+    if (tab === 'settings') {
+      document.getElementById('child-name-input').value = childName;
+      document.getElementById('user-email').textContent = user?.email || '';
+    }
+  }
+
+  // ============================================================
+  // LANGUAGE
+  // ============================================================
+  function toggleLang() {
+    lang = lang === 'no' ? 'en' : 'no';
+    localStorage.setItem('sovn-lang', lang);
+    renderLang();
+    if (currentTab === 'history') renderHistory();
+  }
+
+  function renderLang() {
+    const tx   = t();
+    const name = getName();
+
+    // Auth screen
+    setText('auth-title', tx.authTitle);
+    setText('auth-google-btn-text', tx.signInGoogle);
+    setText('auth-lang-btn', tx.langSwitch);
+
+    // Header / tabs
+    setText('app-title', tx.appTitle);
+    setText('app-lang-btn', tx.langSwitch);
+    setText('tab-new-btn', tx.tabNew);
+    setText('tab-history-btn', tx.tabHistory);
+    setText('tab-settings-btn', tx.tabSettings);
+
+    // New entry form
+    setText('label-date', tx.labelDate);
+    setText('section-before', tx.sectionBefore);
+    setText('section-morning', tx.sectionMorning);
+
+    setText('label-q1', tx.q1(name));
+    renderRadioGroup('q1-radios', 'q1', tx.q1Scale);
+
+    setText('label-q2', tx.q2(name));
+    setText('label-yes', tx.yes);
+    setText('label-no', tx.no_);
+    setAttr('nap-times', 'placeholder', tx.q2NapTimes);
+
+    setText('label-q3', tx.q3(name));
+    setText('label-q4', tx.q4(name));
+    setText('label-in-bed', tx.labelInBed);
+    setText('label-sleep-attempt', tx.labelSleepAttempt);
+
+    setText('label-q5', tx.q5(name));
+    setText('label-minutes-1', tx.minutes);
+    setText('label-q6', tx.q6(name));
+    setText('label-q7', tx.q7(name));
+    setText('label-minutes-2', tx.minutes);
+    setText('label-q8', tx.q8(name));
+    setText('label-q9', tx.q9(name));
+
+    setText('label-q10', tx.q10(name));
+    renderRadioGroup('q10-radios', 'q10', tx.q10Scale);
+
+    setText('btn-save-entry', tx.saveEntry);
+
+    // Settings
+    setText('label-child-name', tx.childNameLabel);
+    setText('btn-save-profile', tx.saveProfile);
+    setText('label-account', tx.accountLabel);
+    setText('btn-sign-out', tx.signOut);
+  }
+
+  function renderRadioGroup(containerId, name, options) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    // Preserve checked state
+    const checked    = document.querySelector(`input[name="${name}"]:checked`);
+    const checkedVal = checked ? parseInt(checked.value) : null;
+    container.innerHTML = '';
+    options.forEach((label, i) => {
+      const val  = i + 1;
+      const id   = `${name}-${val}`;
+      const wrap = document.createElement('label');
+      wrap.htmlFor  = id;
+      wrap.className = 'flex items-center gap-1.5 text-sm text-slate-600 cursor-pointer bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 hover:bg-indigo-50 hover:border-indigo-300 transition';
+
+      const radio = document.createElement('input');
+      radio.type      = 'radio';
+      radio.name      = name;
+      radio.id        = id;
+      radio.value     = val;
+      radio.className = 'accent-indigo-600';
+      if (checkedVal === val) radio.checked = true;
+
+      const span = document.createElement('span');
+      span.textContent = label;
+
+      wrap.appendChild(radio);
+      wrap.appendChild(span);
+      container.appendChild(wrap);
+    });
+  }
+
+  // ============================================================
+  // HISTORY RENDERING
+  // ============================================================
+  function renderHistory() {
+    const list  = document.getElementById('history-list');
+    const empty = document.getElementById('history-empty');
+    list.innerHTML = '';
+
+    if (!entries.length) {
+      empty.textContent = t().historyEmpty;
+      empty.classList.remove('hidden');
+      return;
+    }
+    empty.classList.add('hidden');
+
+    const tx = t();
+    entries.forEach(entry => {
+      const card = document.createElement('div');
+      card.className = 'bg-white rounded-2xl shadow-sm border border-slate-100 p-5';
+
+      // Date heading
+      const dateHeading = document.createElement('p');
+      dateHeading.className = 'font-semibold text-slate-800 mb-3 capitalize';
+      dateHeading.textContent = formatDate(entry.date, lang);
+      card.appendChild(dateHeading);
+
+      // Summary grid
+      const grid = document.createElement('div');
+      grid.className = 'grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm mb-4';
+
+      buildSummaryFields(entry, tx).forEach(([label, value]) => {
+        if (value === null || value === undefined || value === '') return;
+        const lEl = document.createElement('span');
+        lEl.className    = 'text-slate-400 truncate';
+        lEl.textContent  = label;
+        const vEl = document.createElement('span');
+        vEl.className    = 'text-slate-700 font-medium';
+        vEl.textContent  = value;
+        grid.appendChild(lEl);
+        grid.appendChild(vEl);
+      });
+      card.appendChild(grid);
+
+      // Edit + Delete buttons
+      const btnRow = document.createElement('div');
+      btnRow.className = 'flex gap-2';
+
+      const editBtn = document.createElement('button');
+      editBtn.textContent = tx.editBtn;
+      editBtn.className   = 'flex-1 text-sm font-medium py-2 rounded-xl border border-indigo-200 text-indigo-600 hover:bg-indigo-50 transition';
+      editBtn.onclick     = () => editEntry(entry.date);
+
+      const delBtn = document.createElement('button');
+      delBtn.textContent = tx.deleteBtn;
+      delBtn.className   = 'flex-1 text-sm font-medium py-2 rounded-xl border border-red-100 text-red-500 hover:bg-red-50 transition';
+      delBtn.onclick     = () => deleteEntry(entry.date);
+
+      btnRow.appendChild(editBtn);
+      btnRow.appendChild(delBtn);
+      card.appendChild(btnRow);
+
+      list.appendChild(card);
+    });
+  }
+
+  function buildSummaryFields(entry, tx) {
+    return [
+      [tx.fieldQ1,           entry.q1  != null ? tx.q1Scale[entry.q1 - 1]   : null],
+      [tx.fieldNap,          entry.nap === true ? tx.yes : entry.nap === false ? tx.no_ : null],
+      [tx.fieldNapTimes,     entry.nap_times],
+      [tx.fieldMed,          entry.medication],
+      [tx.fieldInBed,        entry.time_in_bed],
+      [tx.fieldSleepAttempt, entry.time_sleep_attempt],
+      [tx.fieldOnset,        entry.sleep_onset != null ? entry.sleep_onset + tx.minutesSuffix : null],
+      [tx.fieldAwakenings,   entry.awakenings_count != null ? String(entry.awakenings_count) : null],
+      [tx.fieldWakeTime,     entry.wake_time != null ? entry.wake_time + tx.minutesSuffix : null],
+      [tx.fieldFinalWake,    entry.final_awakening],
+      [tx.fieldGotUp,        entry.got_up],
+      [tx.fieldQ10,          entry.q10 != null ? tx.q10Scale[entry.q10 - 1] : null],
+    ];
+  }
+
+  // ============================================================
+  // USER AVATAR
+  // ============================================================
+  function renderUserAvatar() {
+    const avatarImg      = document.getElementById('user-avatar');
+    const avatarFallback = document.getElementById('user-avatar-fallback');
+    const avatarUrl      = user?.user_metadata?.avatar_url;
+    const name           = user?.user_metadata?.full_name || user?.email || '';
+
+    if (avatarUrl) {
+      avatarImg.src = avatarUrl;
+      avatarImg.classList.remove('hidden');
+      avatarFallback.classList.add('hidden');
+    } else {
+      avatarFallback.textContent = name.charAt(0).toUpperCase();
+      avatarFallback.classList.remove('hidden');
+      avatarImg.classList.add('hidden');
+    }
+  }
+
+  // ============================================================
+  // NAP TOGGLE
+  // ============================================================
+  function toggleNapTimes() {
+    const yes = document.getElementById('nap-yes').checked;
+    document.getElementById('nap-times-wrap').classList.toggle('hidden', !yes);
+  }
+
+  // ============================================================
+  // HELPERS
+  // ============================================================
+  function setTodayDate() {
+    const today = new Date();
+    const yyyy  = today.getFullYear();
+    const mm    = String(today.getMonth() + 1).padStart(2, '0');
+    const dd    = String(today.getDate()).padStart(2, '0');
+    document.getElementById('entry-date').value = `${yyyy}-${mm}-${dd}`;
+  }
+
+  function setText(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  }
+
+  function setAttr(id, attr, val) {
+    const el = document.getElementById(id);
+    if (el) el.setAttribute(attr, val);
+  }
+
+  function intOrNull(id) {
+    const val = document.getElementById(id).value;
+    return val === '' ? null : parseInt(val, 10);
+  }
+
+  function showFeedback(id, msg) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.remove('hidden');
+    setTimeout(() => el.classList.add('hidden'), 3000);
+  }
+
+  function formatDate(dateStr, language) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const date      = new Date(y, m - 1, d);
+    const locale    = language === 'no' ? 'nb-NO' : 'en-GB';
+    return date.toLocaleDateString(locale, {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+  }
+</script>
 </body>
 </html>
