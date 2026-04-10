@@ -755,12 +755,12 @@ create policy "Members manage entries" on sleep_entries
     const name = document.getElementById('new-child-name').value.trim();
     if (!name) return;
     const shareCode = generateShareCode();
-    const { data: child, error: e1 } = await sb.from('children')
-      .insert({ name, share_code: shareCode }).select().single();
-    if (e1) { showFeedback('create-error', e1.message, true); return; }
-    const { error: e2 } = await sb.from('child_members')
-      .insert({ child_id: child.id, user_id: user.id });
-    if (e2) { showFeedback('create-error', e2.message, true); return; }
+    const { data, error } = await sb.rpc('create_child', {
+      child_name: name,
+      child_share_code: shareCode
+    });
+    if (error) { showFeedback('create-error', error.message, true); return; }
+    const child = typeof data === 'string' ? JSON.parse(data) : data;
     children.push(child);
     await selectChild(child);
   }
