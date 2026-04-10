@@ -488,7 +488,13 @@ create policy "Members manage entries" on sleep_entries
   // ============================================================
   // CLIENT
   // ============================================================
-  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+    auth: {
+      flowType: 'implicit',
+      detectSessionInUrl: true,
+      persistSession: true,
+    }
+  });
 
   // ============================================================
   // STATE
