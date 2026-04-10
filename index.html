@@ -742,6 +742,10 @@ create policy "Members manage entries" on sleep_entries
   // ============================================================
   // CHILDREN
   // ============================================================
+  function sleepQualityEmoji(q10) {
+    return ['😩', '😪', '😐', '🙂', '😊'][q10 - 1] || '';
+  }
+
   function generateShareCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = '';
@@ -1193,7 +1197,7 @@ create policy "Members manage entries" on sleep_entries
       [tx.fieldWakeTime,     entry.wake_time != null ? entry.wake_time + tx.minutesSuffix : null],
       [tx.fieldFinalWake,    entry.final_awakening],
       [tx.fieldGotUp,        entry.got_up],
-      [tx.fieldQ10,          entry.q10 != null ? tx.q10Scale[entry.q10 - 1] : null],
+      [tx.fieldQ10,          entry.q10 != null ? sleepQualityEmoji(entry.q10) + ' ' + tx.q10Scale[entry.q10 - 1] : null],
     ];
   }
 
