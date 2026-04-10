@@ -27,59 +27,62 @@
 <body class="bg-slate-50 min-h-screen">
 
 <!--
-  ============================================================
-  SUPABASE SQL SETUP — run this in your Supabase SQL editor
-  ============================================================
+-- Run this in Supabase SQL Editor (full reset — replaces old schema)
 
-  create table profiles (
-    id uuid references auth.users on delete cascade primary key,
-    child_name text default '',
-    updated_at timestamptz default now()
-  );
+drop table if exists sleep_entries cascade;
+drop table if exists profiles cascade;
 
-  create table sleep_entries (
-    id uuid default gen_random_uuid() primary key,
-    user_id uuid references auth.users on delete cascade not null,
-    date date not null,
-    q1 smallint,
-    nap boolean,
-    nap_times text,
-    medication text,
-    time_in_bed text,
-    time_sleep_attempt text,
-    sleep_onset int,
-    awakenings_count int,
-    wake_time int,
-    final_awakening text,
-    got_up text,
-    q10 smallint,
-    created_at timestamptz default now(),
-    updated_at timestamptz default now(),
-    unique(user_id, date)
-  );
+create table children (
+  id uuid default gen_random_uuid() primary key,
+  name text not null,
+  share_code text unique not null,
+  created_at timestamptz default now()
+);
 
-  alter table profiles enable row level security;
-  alter table sleep_entries enable row level security;
+create table child_members (
+  child_id uuid references children on delete cascade not null,
+  user_id uuid references auth.users on delete cascade not null,
+  primary key (child_id, user_id)
+);
 
-  create policy "Users own profile" on profiles
-    for all using (auth.uid() = id) with check (auth.uid() = id);
+create table sleep_entries (
+  id uuid default gen_random_uuid() primary key,
+  child_id uuid references children on delete cascade not null,
+  date date not null,
+  q1 smallint,
+  nap boolean,
+  nap_times text,
+  medication text,
+  time_in_bed text,
+  time_sleep_attempt text,
+  sleep_onset int,
+  awakenings_count int,
+  wake_time int,
+  final_awakening text,
+  got_up text,
+  q10 smallint,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique(child_id, date)
+);
 
-  create policy "Users own entries" on sleep_entries
-    for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+alter table children enable row level security;
+alter table child_members enable row level security;
+alter table sleep_entries enable row level security;
 
-  create or replace function public.handle_new_user()
-  returns trigger as $$
-  begin
-    insert into public.profiles (id) values (new.id) on conflict do nothing;
-    return new;
-  end;
-  $$ language plpgsql security definer;
+create policy "Members read child" on children
+  for select using (exists (select 1 from child_members where child_id = id and user_id = auth.uid()));
+create policy "Auth users create child" on children
+  for insert to authenticated with check (true);
 
-  create trigger on_auth_user_created
-    after insert on auth.users
-    for each row execute procedure public.handle_new_user();
+create policy "Users read own memberships" on child_members
+  for select using (user_id = auth.uid());
+create policy "Users join child" on child_members
+  for insert to authenticated with check (user_id = auth.uid());
 
-  ============================================================
+create policy "Members manage entries" on sleep_entries
+  for all using (exists (select 1 from child_members where child_id = sleep_entries.child_id and user_id = auth.uid()))
+  with check (exists (select 1 from child_members where child_id = sleep_entries.child_id and user_id = auth.uid()));
 -->
 
 <!-- ===== SCREEN: LOADING ===== -->
@@ -122,12 +125,86 @@
   </div>
 </div>
 
+<!-- ===== SCREEN: CHILDREN ===== -->
+<div id="screen-children" class="hidden fixed inset-0 flex items-center justify-center bg-slate-50 p-4 overflow-y-auto">
+  <div class="w-full max-w-sm">
+    <!-- Top bar -->
+    <div class="flex items-center justify-between mb-6">
+      <!-- Avatar + sign out -->
+      <div class="flex items-center gap-2">
+        <img id="children-avatar-img" src="" alt="" class="w-8 h-8 rounded-full border border-slate-200 object-cover hidden" />
+        <div id="children-avatar-fallback" class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs font-bold hidden"></div>
+        <button onclick="signOut()" class="text-xs text-slate-400 hover:text-red-500 transition" id="children-signout-btn"></button>
+      </div>
+      <!-- Back link (only shown when user already has children) -->
+      <a id="children-back-link" href="#" onclick="showScreen('app'); return false;" class="hidden text-sm text-indigo-600 hover:underline" id="children-back-link"></a>
+      <!-- Language toggle -->
+      <button
+        id="children-lang-btn"
+        onclick="toggleLang()"
+        class="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition"
+      ></button>
+    </div>
+
+    <!-- Title -->
+    <div class="text-center mb-6">
+      <div class="text-3xl mb-1">🌙</div>
+      <h1 class="text-2xl font-bold text-slate-800" id="children-title"></h1>
+      <p class="text-sm text-slate-400 mt-1">Bjørn Bjørvatn · Helse Bergen</p>
+    </div>
+
+    <!-- Card: Create child -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4">
+      <p class="text-sm font-semibold text-slate-700 mb-3" id="create-child-heading"></p>
+      <input
+        type="text"
+        id="new-child-name"
+        class="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300 mb-3"
+        id="new-child-name"
+      />
+      <button
+        onclick="createChild()"
+        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition"
+        id="btn-create-child"
+      ></button>
+      <p id="create-error" class="text-sm mt-2 hidden"></p>
+    </div>
+
+    <!-- Card: Join with code -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+      <p class="text-sm font-semibold text-slate-700 mb-3" id="join-child-heading"></p>
+      <input
+        type="text"
+        id="join-code"
+        maxlength="6"
+        class="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300 mb-3 font-mono uppercase tracking-widest"
+        oninput="this.value = this.value.toUpperCase()"
+      />
+      <button
+        onclick="joinChild()"
+        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition"
+        id="btn-join-child"
+      ></button>
+      <p id="join-error" class="text-sm mt-2 hidden"></p>
+    </div>
+  </div>
+</div>
+
 <!-- ===== SCREEN: APP ===== -->
 <div id="screen-app" class="hidden">
   <!-- Header -->
   <header class="bg-white border-b border-slate-100 sticky top-0 z-10">
     <div class="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
       <h1 class="text-lg font-bold text-slate-800" id="app-title"></h1>
+      <!-- Child badge (center) -->
+      <div class="absolute left-1/2 -translate-x-1/2">
+        <button
+          id="child-badge"
+          onclick="cycleChild()"
+          class="bg-indigo-600 text-white text-xs font-semibold px-3 py-1 rounded-full transition hover:bg-indigo-700"
+          title="Bytt barn / Switch child"
+        ></button>
+      </div>
       <div class="flex items-center gap-2">
         <!-- Lang toggle -->
         <button
@@ -138,12 +215,6 @@
         <!-- Avatar -->
         <img id="user-avatar" src="" alt="" class="w-8 h-8 rounded-full border border-slate-200 object-cover hidden" />
         <div id="user-avatar-fallback" class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs font-bold hidden"></div>
-        <!-- Logout -->
-        <button onclick="signOut()" class="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition" title="Sign out">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h6a2 2 0 012 2v1" />
-          </svg>
-        </button>
       </div>
     </div>
   </header>
@@ -350,23 +421,43 @@
 
     <!-- ===== TAB: SETTINGS ===== -->
     <div id="tab-settings" class="tab-panel hidden">
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4 space-y-4">
+
+      <!-- Section 1: This child -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4 space-y-3">
+        <p class="text-xs uppercase tracking-wide text-slate-400 font-semibold" id="label-this-child"></p>
+        <p id="settings-child-name" class="text-base font-semibold text-slate-800"></p>
         <div>
-          <label class="block text-xs uppercase tracking-wide text-slate-400 font-semibold mb-2" id="label-child-name"></label>
-          <input
-            type="text"
-            id="child-name-input"
-            class="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-          />
+          <p class="text-xs uppercase tracking-wide text-slate-400 font-semibold mb-2" id="label-share-code"></p>
+          <div class="flex items-center gap-3">
+            <span id="share-code-display" class="font-mono text-lg tracking-widest font-bold text-indigo-700 bg-indigo-50 rounded-xl px-4 py-2"></span>
+            <button
+              onclick="copyShareCode()"
+              class="text-sm font-medium px-3 py-2 rounded-xl border border-indigo-200 text-indigo-600 hover:bg-indigo-50 transition"
+              id="btn-copy-code"
+            ></button>
+          </div>
+          <p class="text-xs text-slate-400 mt-2" id="share-code-hint"></p>
+          <p id="member-count" class="text-xs text-slate-500 mt-1"></p>
+          <p id="code-copied" class="text-xs text-green-600 mt-1 hidden"></p>
         </div>
-        <button
-          onclick="saveProfile()"
-          class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition"
-          id="btn-save-profile"
-        ></button>
-        <p id="profile-feedback" class="text-center text-sm text-green-600 hidden"></p>
       </div>
 
+      <!-- Section 2: Children list (only shown if >1 child) -->
+      <div id="settings-children-section" class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4 hidden">
+        <p class="text-xs uppercase tracking-wide text-slate-400 font-semibold mb-3" id="label-children-section"></p>
+        <div id="settings-children-list" class="space-y-2"></div>
+      </div>
+
+      <!-- Section 3: Add child -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4">
+        <button
+          onclick="showScreen('children')"
+          class="w-full bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold py-3 rounded-xl border border-slate-200 transition"
+          id="btn-add-child"
+        ></button>
+      </div>
+
+      <!-- Section 4: Account -->
       <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4">
         <p class="text-xs uppercase tracking-wide text-slate-400 font-semibold mb-1" id="label-account"></p>
         <p id="user-email" class="text-sm text-slate-400"></p>
@@ -384,7 +475,7 @@
 
 <script>
   // ============================================================
-  // CONFIG — replace with your actual Supabase project values
+  // CONFIG
   // ============================================================
   const SUPABASE_URL  = 'https://xdbveygpgzrxpowomdqi.supabase.co';
   const SUPABASE_ANON = 'sb_publishable_vGsYHC4BkhPx1ofIySftjg_QXRUtnGX';
@@ -397,130 +488,158 @@
   // ============================================================
   // STATE
   // ============================================================
-  let user       = null;
-  let childName  = '';
-  let lang       = localStorage.getItem('sovn-lang') || 'no';
-  let currentTab = 'new';
-  let entries    = [];
+  let user         = null;
+  let children     = [];
+  let currentChild = null;
+  let lang         = localStorage.getItem('sovn-lang') || 'no';
+  let currentTab   = 'new';
+  let entries      = [];
+
+  function getChildName() {
+    return currentChild?.name || (lang === 'no' ? 'barnet' : 'your child');
+  }
 
   // ============================================================
   // TRANSLATIONS
   // ============================================================
   const T = {
     no: {
-      appTitle:          'Søvndagbok',
-      authTitle:         'Søvndagbok',
-      signInGoogle:      'Logg inn med Google',
-      langSwitch:        'EN',
-      tabNew:            'Ny registrering',
-      tabHistory:        'Historikk',
-      tabSettings:       'Innstillinger',
-      labelDate:         'Dato',
-      sectionBefore:     'Fylles ut før leggetid',
-      sectionMorning:    'Fylles ut om morgenen',
-      q1:                (name) => `Hvordan har ${name} fungert på dagtid?`,
-      q1Scale:           ['1 – Svært bra', '2 – Bra', '3 – Middels', '4 – Dårlig', '5 – Svært dårlig'],
-      q2:                (name) => `Har ${name} sovet på dagtid?`,
-      q2NapTimes:        'Oppgi tidspunkt og varighet',
-      q3:                (name) => `Medikament gitt til ${name} (valgfritt)`,
-      q4:                (name) => `Når la du ${name}?`,
-      labelInBed:        'La seg',
-      labelSleepAttempt: 'Prøvde å sove',
-      q5:                (name) => `Hvor lang tid brukte ${name} på å sovne?`,
-      minutes:           'minutter',
-      q6:                (name) => `Hvor mange ganger våknet ${name} i løpet av natten?`,
-      q7:                (name) => `Hvor lenge var ${name} våken totalt ved nattlige oppvåkninger?`,
-      q8:                (name) => `Når våknet ${name} endelig om morgenen?`,
-      q9:                (name) => `Når stod ${name} opp?`,
-      q10:               (name) => `Hvordan vurderer du søvnkvaliteten til ${name}?`,
-      q10Scale:          ['1 – Svært lett', '2 – Lett', '3 – Middels', '4 – Dyp', '5 – Svært dyp'],
-      yes:               'Ja',
-      no_:               'Nei',
-      saveEntry:         'Lagre registrering',
-      entrySaved:        'Registrering lagret!',
-      childNameLabel:    'Barnets kallenavn',
-      saveProfile:       'Lagre',
-      profileSaved:      'Lagret!',
-      accountLabel:      'Konto',
-      signOut:           'Logg ut',
-      editBtn:           'Rediger',
-      deleteBtn:         'Slett',
-      historyEmpty:      'Ingen registreringer enda.',
-      fallbackChild:     'barnet',
-      confirmDelete:     'Slett denne registreringen?',
-      fieldNap:          'Dagsøvn',
-      fieldNapTimes:     'Tidspunkt dagsøvn',
-      fieldMed:          'Medikament',
-      fieldInBed:        'La seg',
-      fieldSleepAttempt: 'Prøvde å sove',
-      fieldOnset:        'Innsovningstid',
-      fieldAwakenings:   'Oppvåkninger',
-      fieldWakeTime:     'Våken tid natt',
-      fieldFinalWake:    'Siste oppvåkning',
-      fieldGotUp:        'Stod opp',
-      fieldQ1:           'Dagtidsfungering',
-      fieldQ10:          'Søvnkvalitet',
-      minutesSuffix:     ' min',
+      appTitle:           'Søvndagbok',
+      authTitle:          'Søvndagbok',
+      signInGoogle:       'Logg inn med Google',
+      langSwitch:         'EN',
+      tabNew:             'Ny registrering',
+      tabHistory:         'Historikk',
+      tabSettings:        'Innstillinger',
+      labelDate:          'Dato',
+      sectionBefore:      'Fylles ut før leggetid',
+      sectionMorning:     'Fylles ut om morgenen',
+      q1:                 (name) => `Hvordan har ${name} fungert på dagtid?`,
+      q1Scale:            ['1 – Svært bra', '2 – Bra', '3 – Middels', '4 – Dårlig', '5 – Svært dårlig'],
+      q2:                 (name) => `Har ${name} sovet på dagtid?`,
+      q2NapTimes:         'Oppgi tidspunkt og varighet',
+      q3:                 (name) => `Medikament gitt til ${name} (valgfritt)`,
+      q4:                 (name) => `Når la du ${name}?`,
+      labelInBed:         'La seg',
+      labelSleepAttempt:  'Prøvde å sove',
+      q5:                 (name) => `Hvor lang tid brukte ${name} på å sovne?`,
+      minutes:            'minutter',
+      q6:                 (name) => `Hvor mange ganger våknet ${name} i løpet av natten?`,
+      q7:                 (name) => `Hvor lenge var ${name} våken totalt ved nattlige oppvåkninger?`,
+      q8:                 (name) => `Når våknet ${name} endelig om morgenen?`,
+      q9:                 (name) => `Når stod ${name} opp?`,
+      q10:                (name) => `Hvordan vurderer du søvnkvaliteten til ${name}?`,
+      q10Scale:           ['1 – Svært lett', '2 – Lett', '3 – Middels', '4 – Dyp', '5 – Svært dyp'],
+      yes:                'Ja',
+      no_:                'Nei',
+      saveEntry:          'Lagre registrering',
+      entrySaved:         'Registrering lagret!',
+      accountLabel:       'Konto',
+      signOut:            'Logg ut',
+      editBtn:            'Rediger',
+      deleteBtn:          'Slett',
+      historyEmpty:       'Ingen registreringer enda.',
+      fallbackChild:      'barnet',
+      confirmDelete:      'Slett denne registreringen?',
+      fieldNap:           'Dagsøvn',
+      fieldNapTimes:      'Tidspunkt dagsøvn',
+      fieldMed:           'Medikament',
+      fieldInBed:         'La seg',
+      fieldSleepAttempt:  'Prøvde å sove',
+      fieldOnset:         'Innsovningstid',
+      fieldAwakenings:    'Oppvåkninger',
+      fieldWakeTime:      'Våken tid natt',
+      fieldFinalWake:     'Siste oppvåkning',
+      fieldGotUp:         'Stod opp',
+      fieldQ1:            'Dagtidsfungering',
+      fieldQ10:           'Søvnkvalitet',
+      minutesSuffix:      ' min',
+      createChild:        'Opprett nytt barn',
+      joinChild:          'Bli med via kode',
+      childNamePlaceholder: 'Navn på barnet',
+      codePlaceholder:    'XXXXXX',
+      createBtn:          'Opprett',
+      joinBtn:            'Bli med',
+      shareCodeLabel:     'Delingskode',
+      shareCodeHint:      'Del denne koden med den andre forelderen',
+      copyCode:           'Kopier',
+      addChildBtn:        'Legg til barn',
+      thisChild:          'Dette barnet',
+      backLink:           '← Tilbake',
+      switchChild:        'Bytt',
+      signOutSmall:       'Logg ut',
+      childrenSection:    'Barn',
     },
     en: {
-      appTitle:          'Sleep Diary',
-      authTitle:         'Sleep Diary',
-      signInGoogle:      'Sign in with Google',
-      langSwitch:        'NO',
-      tabNew:            'New entry',
-      tabHistory:        'History',
-      tabSettings:       'Settings',
-      labelDate:         'Date',
-      sectionBefore:     'Fill out before bedtime',
-      sectionMorning:    'Fill out in the morning',
-      q1:                (name) => `How did ${name} function during the day?`,
-      q1Scale:           ['1 – Very good', '2 – Good', '3 – Moderate', '4 – Poor', '5 – Very poor'],
-      q2:                (name) => `Did ${name} nap during the day?`,
-      q2NapTimes:        'Enter times and duration',
-      q3:                (name) => `Medication given to ${name} (optional)`,
-      q4:                (name) => `When did you put ${name} to bed?`,
-      labelInBed:        'In bed',
-      labelSleepAttempt: 'Tried to sleep',
-      q5:                (name) => `How long did it take ${name} to fall asleep?`,
-      minutes:           'minutes',
-      q6:                (name) => `How many times did ${name} wake up during the night?`,
-      q7:                (name) => `How long was ${name} awake in total during nighttime awakenings?`,
-      q8:                (name) => `When did ${name} wake up for good in the morning?`,
-      q9:                (name) => `When did ${name} get up?`,
-      q10:               (name) => `How do you rate ${name}'s sleep quality?`,
-      q10Scale:          ['1 – Very light', '2 – Light', '3 – Moderate', '4 – Deep', '5 – Very deep'],
-      yes:               'Yes',
-      no_:               'No',
-      saveEntry:         'Save entry',
-      entrySaved:        'Entry saved!',
-      childNameLabel:    "Child's nickname",
-      saveProfile:       'Save',
-      profileSaved:      'Saved!',
-      accountLabel:      'Account',
-      signOut:           'Sign out',
-      editBtn:           'Edit',
-      deleteBtn:         'Delete',
-      historyEmpty:      'No entries yet.',
-      fallbackChild:     'your child',
-      confirmDelete:     'Delete this entry?',
-      fieldNap:          'Nap',
-      fieldNapTimes:     'Nap times',
-      fieldMed:          'Medication',
-      fieldInBed:        'In bed',
-      fieldSleepAttempt: 'Tried to sleep',
-      fieldOnset:        'Sleep onset',
-      fieldAwakenings:   'Awakenings',
-      fieldWakeTime:     'Awake time (night)',
-      fieldFinalWake:    'Final awakening',
-      fieldGotUp:        'Got up',
-      fieldQ1:           'Daytime functioning',
-      fieldQ10:          'Sleep quality',
-      minutesSuffix:     ' min',
+      appTitle:           'Sleep Diary',
+      authTitle:          'Sleep Diary',
+      signInGoogle:       'Sign in with Google',
+      langSwitch:         'NO',
+      tabNew:             'New entry',
+      tabHistory:         'History',
+      tabSettings:        'Settings',
+      labelDate:          'Date',
+      sectionBefore:      'Fill out before bedtime',
+      sectionMorning:     'Fill out in the morning',
+      q1:                 (name) => `How did ${name} function during the day?`,
+      q1Scale:            ['1 – Very good', '2 – Good', '3 – Moderate', '4 – Poor', '5 – Very poor'],
+      q2:                 (name) => `Did ${name} nap during the day?`,
+      q2NapTimes:         'Enter times and duration',
+      q3:                 (name) => `Medication given to ${name} (optional)`,
+      q4:                 (name) => `When did you put ${name} to bed?`,
+      labelInBed:         'In bed',
+      labelSleepAttempt:  'Tried to sleep',
+      q5:                 (name) => `How long did it take ${name} to fall asleep?`,
+      minutes:            'minutes',
+      q6:                 (name) => `How many times did ${name} wake up during the night?`,
+      q7:                 (name) => `How long was ${name} awake in total during nighttime awakenings?`,
+      q8:                 (name) => `When did ${name} wake up for good in the morning?`,
+      q9:                 (name) => `When did ${name} get up?`,
+      q10:                (name) => `How do you rate ${name}'s sleep quality?`,
+      q10Scale:           ['1 – Very light', '2 – Light', '3 – Moderate', '4 – Deep', '5 – Very deep'],
+      yes:                'Yes',
+      no_:                'No',
+      saveEntry:          'Save entry',
+      entrySaved:         'Entry saved!',
+      accountLabel:       'Account',
+      signOut:            'Sign out',
+      editBtn:            'Edit',
+      deleteBtn:          'Delete',
+      historyEmpty:       'No entries yet.',
+      fallbackChild:      'your child',
+      confirmDelete:      'Delete this entry?',
+      fieldNap:           'Nap',
+      fieldNapTimes:      'Nap times',
+      fieldMed:           'Medication',
+      fieldInBed:         'In bed',
+      fieldSleepAttempt:  'Tried to sleep',
+      fieldOnset:         'Sleep onset',
+      fieldAwakenings:    'Awakenings',
+      fieldWakeTime:      'Awake time (night)',
+      fieldFinalWake:     'Final awakening',
+      fieldGotUp:         'Got up',
+      fieldQ1:            'Daytime functioning',
+      fieldQ10:           'Sleep quality',
+      minutesSuffix:      ' min',
+      createChild:        'Create new child',
+      joinChild:          'Join with code',
+      childNamePlaceholder: "Child's name",
+      codePlaceholder:    'XXXXXX',
+      createBtn:          'Create',
+      joinBtn:            'Join',
+      shareCodeLabel:     'Share code',
+      shareCodeHint:      'Share this code with the other parent',
+      copyCode:           'Copy',
+      addChildBtn:        'Add child',
+      thisChild:          'This child',
+      backLink:           '← Back',
+      switchChild:        'Switch',
+      signOutSmall:       'Sign out',
+      childrenSection:    'Children',
     }
   };
 
-  function t()      { return T[lang]; }
-  function getName() { return childName || t().fallbackChild; }
+  function t() { return T[lang]; }
 
   // ============================================================
   // INIT
@@ -540,9 +659,10 @@
         user = session.user;
         await bootstrap();
       } else if (event === 'SIGNED_OUT') {
-        user        = null;
-        childName   = '';
-        entries     = [];
+        user         = null;
+        children     = [];
+        currentChild = null;
+        entries      = [];
         showScreen('auth');
         renderLang();
       }
@@ -550,7 +670,16 @@
   });
 
   async function bootstrap() {
-    await Promise.all([loadProfile(), loadEntries()]);
+    children = await loadChildren();
+    if (children.length === 0) {
+      renderLang();
+      renderUserAvatar();
+      showScreen('children');
+      return;
+    }
+    const lastId = localStorage.getItem('sovn-last-child');
+    currentChild = children.find(c => c.id === lastId) || children[0];
+    await loadEntries();
     setTodayDate();
     renderLang();
     renderUserAvatar();
@@ -562,9 +691,18 @@
   // SCREENS
   // ============================================================
   function showScreen(name) {
-    ['loading', 'auth', 'app'].forEach(s => {
+    ['loading', 'auth', 'children', 'app'].forEach(s => {
       document.getElementById(`screen-${s}`).classList.toggle('hidden', s !== name);
     });
+    if (name === 'children') {
+      renderLang();
+      renderUserAvatar();
+      // Show back link only if user already has children
+      const backLink = document.getElementById('children-back-link');
+      if (backLink) {
+        backLink.classList.toggle('hidden', children.length === 0);
+      }
+    }
   }
 
   // ============================================================
@@ -582,41 +720,90 @@
   }
 
   // ============================================================
-  // PROFILE
+  // CHILDREN
   // ============================================================
-  async function loadProfile() {
-    if (!user) return;
-    const { data } = await sb
-      .from('profiles')
-      .select('child_name')
-      .eq('id', user.id)
-      .single();
-    if (data) childName = data.child_name || '';
+  function generateShareCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    return code;
   }
 
-  async function saveProfile() {
-    const newName = document.getElementById('child-name-input').value.trim();
-    const { error } = await sb
-      .from('profiles')
-      .upsert({ id: user.id, child_name: newName, updated_at: new Date().toISOString() });
-    if (!error) {
-      childName = newName;
-      renderLang();
-      showFeedback('profile-feedback', t().profileSaved);
-    }
+  async function loadChildren() {
+    const { data } = await sb.from('child_members')
+      .select('child_id, children(id, name, share_code)')
+      .eq('user_id', user.id);
+    return (data || []).map(r => r.children).filter(Boolean);
+  }
+
+  async function createChild() {
+    const name = document.getElementById('new-child-name').value.trim();
+    if (!name) return;
+    const shareCode = generateShareCode();
+    const { data: child, error: e1 } = await sb.from('children')
+      .insert({ name, share_code: shareCode }).select().single();
+    if (e1) { showFeedback('create-error', e1.message, true); return; }
+    const { error: e2 } = await sb.from('child_members')
+      .insert({ child_id: child.id, user_id: user.id });
+    if (e2) { showFeedback('create-error', e2.message, true); return; }
+    children.push(child);
+    await selectChild(child);
+  }
+
+  async function joinChild() {
+    const code = document.getElementById('join-code').value.trim().toUpperCase();
+    if (code.length !== 6) return;
+    const { data: child, error: e1 } = await sb.from('children')
+      .select('*').eq('share_code', code).single();
+    if (e1 || !child) { showFeedback('join-error', lang === 'no' ? 'Fant ingen barn med denne koden.' : 'No child found with this code.', true); return; }
+    const { error: e2 } = await sb.from('child_members')
+      .insert({ child_id: child.id, user_id: user.id });
+    if (e2 && e2.code !== '23505') { showFeedback('join-error', e2.message, true); return; }
+    if (!children.find(c => c.id === child.id)) children.push(child);
+    await selectChild(child);
+  }
+
+  async function selectChild(child) {
+    currentChild = child;
+    localStorage.setItem('sovn-last-child', child.id);
+    await loadEntries();
+    setTodayDate();
+    renderLang();
+    renderUserAvatar();
+    showScreen('app');
+    switchTab('new');
+  }
+
+  async function cycleChild() {
+    if (children.length < 2) return;
+    const idx = children.findIndex(c => c.id === currentChild.id);
+    const next = children[(idx + 1) % children.length];
+    await selectChild(next);
+  }
+
+  async function copyShareCode() {
+    if (!currentChild) return;
+    await navigator.clipboard.writeText(currentChild.share_code);
+    showFeedback('code-copied', lang === 'no' ? 'Kopiert!' : 'Copied!');
+  }
+
+  async function loadMemberCount() {
+    const { count } = await sb.from('child_members')
+      .select('*', { count: 'exact', head: true })
+      .eq('child_id', currentChild.id);
+    return count || 1;
   }
 
   // ============================================================
   // ENTRIES
   // ============================================================
   async function loadEntries() {
-    if (!user) return;
-    const { data, error } = await sb
-      .from('sleep_entries')
+    if (!currentChild) return;
+    const { data } = await sb.from('sleep_entries')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('child_id', currentChild.id)
       .order('date', { ascending: false });
-    if (!error && data) entries = data;
+    entries = data || [];
   }
 
   async function handleSaveEntry(e) {
@@ -629,7 +816,7 @@
     const q10El = document.querySelector('input[name="q10"]:checked');
 
     const payload = {
-      user_id:             user.id,
+      child_id:            currentChild.id,
       date:                date,
       q1:                  q1El  ? parseInt(q1El.value)  : null,
       nap:                 nap,
@@ -648,7 +835,7 @@
 
     const { data, error } = await sb
       .from('sleep_entries')
-      .upsert(payload, { onConflict: 'user_id,date' })
+      .upsert(payload, { onConflict: 'child_id,date' })
       .select();
 
     if (error) {
@@ -670,7 +857,7 @@
     const { error } = await sb
       .from('sleep_entries')
       .delete()
-      .eq('user_id', user.id)
+      .eq('child_id', currentChild.id)
       .eq('date', date);
     if (!error) {
       entries = entries.filter(en => en.date !== date);
@@ -740,9 +927,51 @@
     });
     if (tab === 'history') renderHistory();
     if (tab === 'settings') {
-      document.getElementById('child-name-input').value = childName;
       document.getElementById('user-email').textContent = user?.email || '';
+      // Child name
+      const nameEl = document.getElementById('settings-child-name');
+      if (nameEl) nameEl.textContent = currentChild?.name || '';
+      // Share code
+      const codeEl = document.getElementById('share-code-display');
+      if (codeEl) codeEl.textContent = currentChild?.share_code || '';
+      // Children list (only if >1)
+      renderSettingsChildrenList();
+      // Member count
+      loadMemberCount().then(count => {
+        const el = document.getElementById('member-count');
+        if (el) el.textContent = lang === 'no'
+          ? `${count} forelder${count === 1 ? '' : 'e'} har tilgang`
+          : `${count} parent${count === 1 ? '' : 's'} have access`;
+      });
     }
+  }
+
+  function renderSettingsChildrenList() {
+    const section = document.getElementById('settings-children-section');
+    const list    = document.getElementById('settings-children-list');
+    if (!section || !list) return;
+    if (children.length <= 1) {
+      section.classList.add('hidden');
+      return;
+    }
+    section.classList.remove('hidden');
+    list.innerHTML = '';
+    children.forEach(child => {
+      const row = document.createElement('div');
+      row.className = 'flex items-center justify-between py-1';
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'text-sm text-slate-700' + (child.id === currentChild?.id ? ' font-semibold text-indigo-600' : '');
+      nameSpan.textContent = child.name;
+      row.appendChild(nameSpan);
+      if (child.id !== currentChild?.id) {
+        const btn = document.createElement('button');
+        btn.textContent = t().switchChild;
+        btn.className = 'text-xs font-medium px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50 transition';
+        btn.onclick = () => selectChild(child);
+        row.appendChild(btn);
+      }
+      list.appendChild(row);
+    });
   }
 
   // ============================================================
@@ -757,12 +986,24 @@
 
   function renderLang() {
     const tx   = t();
-    const name = getName();
+    const name = getChildName();
 
     // Auth screen
     setText('auth-title', tx.authTitle);
     setText('auth-google-btn-text', tx.signInGoogle);
     setText('auth-lang-btn', tx.langSwitch);
+
+    // Children screen
+    setText('children-title', tx.authTitle);
+    setText('children-lang-btn', tx.langSwitch);
+    setText('children-signout-btn', tx.signOutSmall);
+    setText('children-back-link', tx.backLink);
+    setText('create-child-heading', tx.createChild);
+    setAttr('new-child-name', 'placeholder', tx.childNamePlaceholder);
+    setText('btn-create-child', tx.createBtn);
+    setText('join-child-heading', tx.joinChild);
+    setAttr('join-code', 'placeholder', tx.codePlaceholder);
+    setText('btn-join-child', tx.joinBtn);
 
     // Header / tabs
     setText('app-title', tx.appTitle);
@@ -770,6 +1011,13 @@
     setText('tab-new-btn', tx.tabNew);
     setText('tab-history-btn', tx.tabHistory);
     setText('tab-settings-btn', tx.tabSettings);
+
+    // Child badge
+    const badge = document.getElementById('child-badge');
+    if (badge) {
+      badge.textContent = currentChild?.name || '';
+      badge.style.cursor = children.length > 1 ? 'pointer' : 'default';
+    }
 
     // New entry form
     setText('label-date', tx.labelDate);
@@ -803,8 +1051,12 @@
     setText('btn-save-entry', tx.saveEntry);
 
     // Settings
-    setText('label-child-name', tx.childNameLabel);
-    setText('btn-save-profile', tx.saveProfile);
+    setText('label-this-child', tx.thisChild);
+    setText('label-share-code', tx.shareCodeLabel);
+    setText('share-code-hint', tx.shareCodeHint);
+    setText('btn-copy-code', tx.copyCode);
+    setText('label-children-section', tx.childrenSection);
+    setText('btn-add-child', tx.addChildBtn);
     setText('label-account', tx.accountLabel);
     setText('btn-sign-out', tx.signOut);
   }
@@ -812,7 +1064,6 @@
   function renderRadioGroup(containerId, name, options) {
     const container = document.getElementById(containerId);
     if (!container) return;
-    // Preserve checked state
     const checked    = document.querySelector(`input[name="${name}"]:checked`);
     const checkedVal = checked ? parseInt(checked.value) : null;
     container.innerHTML = '';
@@ -820,7 +1071,7 @@
       const val  = i + 1;
       const id   = `${name}-${val}`;
       const wrap = document.createElement('label');
-      wrap.htmlFor  = id;
+      wrap.htmlFor   = id;
       wrap.className = 'flex items-center gap-1.5 text-sm text-slate-600 cursor-pointer bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 hover:bg-indigo-50 hover:border-indigo-300 transition';
 
       const radio = document.createElement('input');
@@ -860,30 +1111,27 @@
       const card = document.createElement('div');
       card.className = 'bg-white rounded-2xl shadow-sm border border-slate-100 p-5';
 
-      // Date heading
       const dateHeading = document.createElement('p');
       dateHeading.className = 'font-semibold text-slate-800 mb-3 capitalize';
       dateHeading.textContent = formatDate(entry.date, lang);
       card.appendChild(dateHeading);
 
-      // Summary grid
       const grid = document.createElement('div');
       grid.className = 'grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm mb-4';
 
       buildSummaryFields(entry, tx).forEach(([label, value]) => {
         if (value === null || value === undefined || value === '') return;
         const lEl = document.createElement('span');
-        lEl.className    = 'text-slate-400 truncate';
-        lEl.textContent  = label;
+        lEl.className   = 'text-slate-400 truncate';
+        lEl.textContent = label;
         const vEl = document.createElement('span');
-        vEl.className    = 'text-slate-700 font-medium';
-        vEl.textContent  = value;
+        vEl.className   = 'text-slate-700 font-medium';
+        vEl.textContent = value;
         grid.appendChild(lEl);
         grid.appendChild(vEl);
       });
       card.appendChild(grid);
 
-      // Edit + Delete buttons
       const btnRow = document.createElement('div');
       btnRow.className = 'flex gap-2';
 
@@ -926,19 +1174,39 @@
   // USER AVATAR
   // ============================================================
   function renderUserAvatar() {
+    // App screen avatars
     const avatarImg      = document.getElementById('user-avatar');
     const avatarFallback = document.getElementById('user-avatar-fallback');
-    const avatarUrl      = user?.user_metadata?.avatar_url;
-    const name           = user?.user_metadata?.full_name || user?.email || '';
+    // Children screen avatars
+    const childrenAvatarImg      = document.getElementById('children-avatar-img');
+    const childrenAvatarFallback = document.getElementById('children-avatar-fallback');
 
-    if (avatarUrl) {
-      avatarImg.src = avatarUrl;
-      avatarImg.classList.remove('hidden');
-      avatarFallback.classList.add('hidden');
-    } else {
-      avatarFallback.textContent = name.charAt(0).toUpperCase();
-      avatarFallback.classList.remove('hidden');
-      avatarImg.classList.add('hidden');
+    const avatarUrl = user?.user_metadata?.avatar_url;
+    const name      = user?.user_metadata?.full_name || user?.email || '';
+    const initial   = name.charAt(0).toUpperCase();
+
+    if (avatarImg && avatarFallback) {
+      if (avatarUrl) {
+        avatarImg.src = avatarUrl;
+        avatarImg.classList.remove('hidden');
+        avatarFallback.classList.add('hidden');
+      } else {
+        avatarFallback.textContent = initial;
+        avatarFallback.classList.remove('hidden');
+        avatarImg.classList.add('hidden');
+      }
+    }
+
+    if (childrenAvatarImg && childrenAvatarFallback) {
+      if (avatarUrl) {
+        childrenAvatarImg.src = avatarUrl;
+        childrenAvatarImg.classList.remove('hidden');
+        childrenAvatarFallback.classList.add('hidden');
+      } else {
+        childrenAvatarFallback.textContent = initial;
+        childrenAvatarFallback.classList.remove('hidden');
+        childrenAvatarImg.classList.add('hidden');
+      }
     }
   }
 
@@ -980,7 +1248,7 @@
     const el = document.getElementById(id);
     if (!el) return;
     el.textContent = msg;
-    el.className = `text-center text-sm mt-2 ${isError ? 'text-red-600' : 'text-green-600'}`;
+    el.className = `text-sm mt-2 ${isError ? 'text-red-600' : 'text-green-600'}`;
     el.classList.remove('hidden');
     if (!isError) setTimeout(() => el.classList.add('hidden'), 3000);
   }
