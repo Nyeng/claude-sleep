@@ -649,16 +649,20 @@
     const { data, error } = await sb
       .from('sleep_entries')
       .upsert(payload, { onConflict: 'user_id,date' })
-      .select()
-      .single();
+      .select();
 
-    if (!error && data) {
-      const idx = entries.findIndex(en => en.date === date);
-      if (idx >= 0) entries[idx] = data;
-      else entries.unshift(data);
-      entries.sort((a, b) => b.date.localeCompare(a.date));
-      showFeedback('entry-feedback', t().entrySaved);
+    if (error) {
+      showFeedback('entry-feedback', '⚠️ ' + error.message, true);
+      console.error('Save error:', error);
+      return;
     }
+
+    const saved = data?.[0] ?? payload;
+    const idx = entries.findIndex(en => en.date === date);
+    if (idx >= 0) entries[idx] = saved;
+    else entries.unshift(saved);
+    entries.sort((a, b) => b.date.localeCompare(a.date));
+    showFeedback('entry-feedback', t().entrySaved);
   }
 
   async function deleteEntry(date) {
@@ -972,12 +976,13 @@
     return val === '' ? null : parseInt(val, 10);
   }
 
-  function showFeedback(id, msg) {
+  function showFeedback(id, msg, isError = false) {
     const el = document.getElementById(id);
     if (!el) return;
     el.textContent = msg;
+    el.className = `text-center text-sm mt-2 ${isError ? 'text-red-600' : 'text-green-600'}`;
     el.classList.remove('hidden');
-    setTimeout(() => el.classList.add('hidden'), 3000);
+    if (!isError) setTimeout(() => el.classList.add('hidden'), 3000);
   }
 
   function formatDate(dateStr, language) {
