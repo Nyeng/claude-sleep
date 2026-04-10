@@ -844,6 +844,11 @@ create policy "Members manage entries" on sleep_entries
 
   async function handleSaveEntry(e) {
     e.preventDefault();
+    if (!currentChild) {
+      showFeedback('entry-feedback', '⚠️ Ingen barn valgt — last siden på nytt.', true);
+      return;
+    }
+    try {
     const date   = document.getElementById('entry-date').value;
     const napVal = document.querySelector('input[name="nap"]:checked');
     const nap    = napVal ? napVal.value === 'yes' : null;
@@ -886,6 +891,10 @@ create policy "Members manage entries" on sleep_entries
     else entries.unshift(saved);
     entries.sort((a, b) => b.date.localeCompare(a.date));
     showFeedback('entry-feedback', t().entrySaved);
+    } catch (err) {
+      showFeedback('entry-feedback', '⚠️ ' + err.message, true);
+      console.error('handleSaveEntry crash:', err);
+    }
   }
 
   async function deleteEntry(date) {
