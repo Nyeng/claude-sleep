@@ -4,27 +4,322 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Søvndagbok</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Syne:wght@500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
+    :root {
+      --bg:           #f2ede4;
+      --surface:      #ffffff;
+      --surface-2:    #faf7f3;
+      --border:       #e0d8cc;
+      --text-1:       #1c1712;
+      --text-2:       #5c5248;
+      --text-3:       #9c8f84;
+      --accent:       #b8401e;
+      --accent-soft:  rgba(184,64,30,0.08);
+      --accent-hover: #9a3318;
+      --green:        #274d3a;
+      --green-hover:  #1a3427;
+      --green-soft:   rgba(39,77,58,0.07);
+      --dot-color:    rgba(184,64,30,0.09);
+    }
+
+    html { font-size: 17px; }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      font-family: 'Spectral', Georgia, serif;
+    }
+
     /* Prevent iOS input zoom */
     input, select, textarea { font-size: 16px !important; }
 
+    .hidden { display: none !important; }
+
+    body {
+      min-height: 100vh;
+      background-color: var(--bg);
+      background-image:
+        radial-gradient(circle, var(--dot-color) 1px, transparent 1px);
+      background-size: 22px 22px;
+      color: var(--text-1);
+    }
+
+    /* Syne for UI labels — creates the serif/geometric tension */
+    .ui-label {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-size: 0.7rem;
+      color: var(--text-3);
+    }
+
+    /* Accent label (section headers) */
+    .accent-label {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-size: 0.7rem;
+      color: var(--accent);
+    }
+
     /* Loading spinner */
     .spinner {
-      width: 40px; height: 40px;
-      border: 4px solid #e0e7ff;
-      border-top-color: #4f46e5;
+      width: 32px; height: 32px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
       border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+      animation: spin 0.9s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* Hide utility */
-    .hidden { display: none !important; }
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 1px 2px rgba(28,23,18,0.04), 0 4px 12px rgba(28,23,18,0.03);
+    }
+
+    /* Input */
+    .field {
+      width: 100%;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 11px 13px;
+      color: var(--text-1);
+      font-size: 1rem !important;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .field:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(184,64,30,0.1);
+    }
+    .field::placeholder { color: var(--text-3); }
+
+    /* Primary button (forest green) */
+    .btn-primary {
+      width: 100%;
+      background: var(--green);
+      color: #fff;
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 0.8125rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      border: none;
+      border-radius: 8px;
+      padding: 13px;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn-primary:hover { background: var(--green-hover); }
+    .btn-primary:active { transform: scale(0.99); }
+
+    /* Ghost button */
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-family: 'Syne', sans-serif;
+      font-weight: 600;
+      font-size: 0.6875rem;
+      letter-spacing: 0.05em;
+      color: var(--text-2);
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* Tab button */
+    .tab-btn {
+      flex: 1;
+      padding: 10px 4px;
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border: none;
+      border-bottom: 2px solid transparent;
+      background: transparent;
+      color: var(--text-3);
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .tab-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    /* Tab panel stagger */
+    .tab-panel { animation: reveal 0.2s ease both; }
+    .tab-panel .card:nth-child(1) { animation: cardIn 0.22s ease both; }
+    .tab-panel .card:nth-child(2) { animation: cardIn 0.22s 0.04s ease both; }
+    .tab-panel .card:nth-child(3) { animation: cardIn 0.22s 0.08s ease both; }
+    .tab-panel .card:nth-child(4) { animation: cardIn 0.22s 0.12s ease both; }
+    @keyframes reveal  { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes cardIn  { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+    /* Radio option */
+    .radio-opt {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'Spectral', serif;
+      font-size: 0.9375rem;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 7px 12px;
+      background: var(--surface-2);
+      color: var(--text-2);
+      transition: all 0.15s;
+    }
+    .radio-opt:hover { border-color: var(--accent); color: var(--text-1); }
+    .radio-opt.checked {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    /* Yes/No toggle */
+    .yn-opt {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-family: 'Spectral', serif;
+      font-size: 0.875rem;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 8px 16px;
+      background: var(--surface-2);
+      color: var(--text-2);
+      transition: all 0.15s;
+    }
+    .yn-opt:hover { border-color: var(--accent); }
+    .yn-opt.yn-checked { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+
+    /* Auth screen overlay */
+    .auth-bg {
+      background-color: var(--bg);
+      background-image: radial-gradient(circle, var(--dot-color) 1px, transparent 1px);
+      background-size: 22px 22px;
+    }
+
+    /* Sign-out button */
+    .btn-danger {
+      width: 100%;
+      background: transparent;
+      border: 1px solid #e8c8c0;
+      border-radius: 8px;
+      padding: 11px;
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 0.6875rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #b8401e;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-danger:hover { background: rgba(184,64,30,0.06); }
+
+    /* Share code */
+    .share-code {
+      font-family: 'Syne', monospace;
+      font-weight: 800;
+      letter-spacing: 0.2em;
+      font-size: 1.25rem;
+      color: var(--accent);
+      background: var(--accent-soft);
+      border: 1px solid rgba(184,64,30,0.15);
+      border-radius: 8px;
+      padding: 7px 16px;
+    }
+
+    /* Number spinner hide */
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
+    input[type=number] { -moz-appearance: textfield; }
+
+    /* History collapse */
+    .entry-body {
+      overflow: hidden;
+      max-height: 0;
+      transition: max-height 0.28s cubic-bezier(0.4,0,0.2,1), opacity 0.2s ease;
+      opacity: 0;
+    }
+    .entry-body.open {
+      max-height: 500px;
+      opacity: 1;
+    }
+    .entry-chevron {
+      transition: transform 0.25s cubic-bezier(0.4,0,0.2,1);
+      flex-shrink: 0;
+      color: var(--text-3);
+    }
+    .entry-chevron.open {
+      transform: rotate(180deg);
+    }
+    .entry-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      cursor: pointer;
+      user-select: none;
+      padding: 14px 16px;
+    }
+    .entry-header:hover .entry-chevron { color: var(--accent); }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+    /* Section divider line */
+    .section-rule {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 20px 0 10px;
+    }
+    .section-rule::before, .section-rule::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* Child badge pill */
+    .child-badge {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 0.625rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 4px 12px;
+      border-radius: 99px;
+      background: var(--accent-soft);
+      border: 1px solid rgba(184,64,30,0.18);
+      color: var(--accent);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .child-badge:hover { background: rgba(184,64,30,0.14); }
   </style>
 </head>
-<body class="min-h-screen" style="background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #eef2ff 100%);">
+<body>
 
 <!--
 -- Run this in Supabase SQL Editor (full reset — replaces old schema)
@@ -86,410 +381,269 @@ create policy "Members manage entries" on sleep_entries
 -->
 
 <!-- ===== SCREEN: LOADING ===== -->
-<div id="screen-loading" class="fixed inset-0 flex items-center justify-center bg-slate-50">
-  <div class="text-center px-6">
-    <div class="spinner mx-auto mb-4"></div>
-    <p id="loading-error" class="hidden text-sm text-red-600 max-w-xs">
-      Kunne ikke koble til databasen. Sjekk at du har kjørt SQL-oppsettet i Supabase.
-    </p>
+<div id="screen-loading" class="fixed inset-0 flex items-center justify-center auth-bg">
+  <div class="text-center">
+    <div class="spinner mx-auto mb-3"></div>
+    <p id="loading-error" class="hidden text-sm max-w-xs mt-2" style="color: var(--accent); font-style: italic;"></p>
   </div>
 </div>
 
 <!-- ===== SCREEN: AUTH ===== -->
-<div id="screen-auth" class="hidden fixed inset-0 flex items-center justify-center p-4" style="background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 60%, #ede9fe 100%);">
-  <div class="bg-white rounded-3xl p-8 w-full max-w-sm text-center" style="box-shadow: 0 8px 40px rgba(99,102,241,0.12)">
-    <!-- Language toggle -->
-    <div class="flex justify-end mb-6">
-      <button
-        id="auth-lang-btn"
-        onclick="toggleLang()"
-        class="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition"
-      ></button>
+<div id="screen-auth" class="hidden fixed inset-0 flex items-center justify-center p-6 auth-bg">
+  <div class="w-full max-w-xs">
+    <div class="flex justify-end mb-10">
+      <button id="auth-lang-btn" onclick="toggleLang()" class="btn-ghost"></button>
     </div>
 
-    <!-- Title -->
-    <div class="mb-8">
-      <div class="text-5xl mb-3">🌙</div>
-      <h1 class="text-2xl font-bold text-slate-800" id="auth-title"></h1>
-      <p class="text-sm text-slate-400 mt-1">Basert på <a href="https://www.helse-bergen.no/nasjonal-kompetansetjeneste-for-sovnsykdommer-sovno/sovndagbok-sovno" target="_blank" rel="noopener" class="underline hover:text-slate-600">søvndagbok fra Helse Bergen</a></p>
+    <div class="mb-10">
+      <div style="font-size: 2.5rem; margin-bottom: 12px; line-height: 1;">🌙</div>
+      <h1 id="auth-title" style="font-size: 2rem; font-weight: 700; color: var(--text-1); line-height: 1.15; margin-bottom: 8px;"></h1>
+      <p style="font-size: 0.8125rem; color: var(--text-3); font-style: italic;">
+        Basert på <a href="https://www.helse-bergen.no/nasjonal-kompetansetjeneste-for-sovnsykdommer-sovno/sovndagbok-sovno" target="_blank" rel="noopener" style="color: var(--accent); text-decoration: underline;">søvndagbok fra Helse Bergen</a>
+      </p>
     </div>
 
-    <!-- Google sign in -->
-    <button
-      onclick="signInWithGoogle()"
-      class="w-full flex items-center justify-center gap-3 border border-slate-200 bg-white rounded-xl py-3.5 px-4 font-medium text-slate-700 hover:bg-slate-50 transition"
-      style="box-shadow: 0 1px 4px rgba(0,0,0,0.08);"
-    >
-      <svg width="20" height="20" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <button onclick="signInWithGoogle()" style="width:100%; display:flex; align-items:center; justify-content:center; gap:12px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:13px 16px; cursor:pointer; transition: border-color 0.15s, box-shadow 0.15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.boxShadow='0 0 0 3px rgba(184,64,30,0.1)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
+      <svg width="18" height="18" viewBox="0 0 48 48" fill="none">
         <path d="M47.532 24.552c0-1.636-.132-3.2-.388-4.704H24.48v8.898h12.944c-.556 3.01-2.242 5.562-4.782 7.278v6.048h7.742c4.532-4.176 7.148-10.326 7.148-17.52z" fill="#4285F4"/>
         <path d="M24.48 48c6.492 0 11.942-2.154 15.922-5.83l-7.742-6.048c-2.148 1.44-4.896 2.29-8.18 2.29-6.294 0-11.622-4.252-13.524-9.972H2.952v6.248C6.912 42.854 15.12 48 24.48 48z" fill="#34A853"/>
         <path d="M10.956 28.44A14.396 14.396 0 0 1 10.13 24c0-1.544.268-3.048.826-4.44v-6.248H2.952A23.978 23.978 0 0 0 .48 24c0 3.876.926 7.546 2.472 10.688l8.004-6.248z" fill="#FBBC05"/>
         <path d="M24.48 9.584c3.546 0 6.73 1.218 9.234 3.612l6.918-6.918C36.41 2.388 30.962 0 24.48 0 15.12 0 6.912 5.146 2.952 13.312l8.004 6.248c1.902-5.72 7.23-9.976 13.524-9.976z" fill="#EA4335"/>
       </svg>
-      <span id="auth-google-btn-text"></span>
+      <span id="auth-google-btn-text" style="font-family:'Syne',sans-serif; font-weight:700; font-size:0.8125rem; letter-spacing:0.04em; color:var(--text-1);"></span>
     </button>
 
-    <p class="text-xs text-slate-400 mt-5">
+    <p style="font-size:0.6875rem; color:var(--text-3); margin-top:16px; font-style:italic;">
       Ved å logge inn godtar du vår
-      <a href="/personvern.html" target="_blank" rel="noopener" class="underline hover:text-slate-600">personvernerklæring</a>.
+      <a href="/personvern.html" target="_blank" rel="noopener" style="color:var(--accent); text-decoration:underline;">personvernerklæring</a>.
     </p>
   </div>
 </div>
 
 <!-- ===== SCREEN: CHILDREN ===== -->
-<div id="screen-children" class="hidden fixed inset-0 flex items-center justify-center bg-slate-50 p-4 overflow-y-auto">
-  <div class="w-full max-w-sm">
-    <!-- Top bar -->
-    <div class="flex items-center justify-between mb-6">
-      <!-- Avatar + sign out -->
+<div id="screen-children" class="hidden fixed inset-0 flex items-center justify-center auth-bg p-6 overflow-y-auto">
+  <div class="w-full max-w-sm py-4">
+    <div class="flex items-center justify-between mb-8">
       <div class="flex items-center gap-2">
-        <img id="children-avatar-img" src="" alt="" class="w-8 h-8 rounded-full border border-slate-200 object-cover hidden" />
-        <div id="children-avatar-fallback" class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs font-bold hidden"></div>
-        <button onclick="signOut()" class="text-xs text-slate-400 hover:text-red-500 transition" id="children-signout-btn"></button>
+        <img id="children-avatar-img" src="" alt="" class="hidden" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid var(--border);" />
+        <div id="children-avatar-fallback" class="hidden" style="width:28px;height:28px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-size:0.7rem;font-family:'Syne',sans-serif;font-weight:800;display:flex;align-items:center;justify-content:center;"></div>
+        <button onclick="signOut()" id="children-signout-btn" style="font-family:'Syne',sans-serif;font-size:0.625rem;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:var(--text-3);background:none;border:none;cursor:pointer;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-3)'"></button>
       </div>
-      <!-- Back link (only shown when user already has children) -->
-      <a id="children-back-link" href="#" onclick="showScreen('app'); return false;" class="hidden text-sm text-indigo-600 hover:underline" id="children-back-link"></a>
-      <!-- Language toggle -->
-      <button
-        id="children-lang-btn"
-        onclick="toggleLang()"
-        class="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition"
-      ></button>
+      <a id="children-back-link" href="#" onclick="showScreen('app'); return false;" class="hidden" style="font-family:'Syne',sans-serif;font-size:0.625rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--accent);text-decoration:none;"></a>
+      <button id="children-lang-btn" onclick="toggleLang()" class="btn-ghost"></button>
     </div>
 
-    <!-- Title -->
-    <div class="text-center mb-6">
-      <div class="text-3xl mb-1">🌙</div>
-      <h1 class="text-2xl font-bold text-slate-800" id="children-title"></h1>
-      <p class="text-sm text-slate-400 mt-1">Basert på <a href="https://www.helse-bergen.no/nasjonal-kompetansetjeneste-for-sovnsykdommer-sovno/sovndagbok-sovno" target="_blank" rel="noopener" class="underline hover:text-slate-600">søvndagbok fra Helse Bergen</a></p>
+    <div style="margin-bottom: 28px;">
+      <div style="font-size:2rem;margin-bottom:10px;">🌙</div>
+      <h1 id="children-title" style="font-size:1.75rem;font-weight:700;color:var(--text-1);line-height:1.2;margin-bottom:6px;"></h1>
+      <p style="font-size:0.75rem;color:var(--text-3);font-style:italic;">
+        Basert på <a href="https://www.helse-bergen.no/nasjonal-kompetansetjeneste-for-sovnsykdommer-sovno/sovndagbok-sovno" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline;">søvndagbok fra Helse Bergen</a>
+      </p>
     </div>
 
-    <!-- Card: Myself -->
-    <div class="rounded-2xl border-2 border-indigo-300 p-5 mb-4" style="background: linear-gradient(135deg, #eef2ff 0%, #f5f3ff 100%);" id="card-create-self">
-      <div class="flex items-center gap-2 mb-1">
-        <span class="text-xl">👤</span>
-        <p class="text-sm font-bold text-indigo-800" id="create-self-heading"></p>
+    <!-- Myself -->
+    <div id="card-create-self" class="card p-5 mb-3" style="border-color:rgba(184,64,30,0.2);background:var(--accent-soft);">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+        <span>👤</span>
+        <p id="create-self-heading" style="font-family:'Syne',sans-serif;font-weight:800;font-size:0.75rem;letter-spacing:0.04em;color:var(--accent);text-transform:uppercase;"></p>
       </div>
-      <p class="text-xs text-indigo-500 mb-3" id="create-self-desc"></p>
-      <button
-        onclick="createSelf()"
-        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition"
-        id="btn-create-self"
-      ></button>
+      <p id="create-self-desc" style="font-size:0.8125rem;font-style:italic;color:var(--text-2);margin-bottom:14px;"></p>
+      <button onclick="createSelf()" class="btn-primary" id="btn-create-self"></button>
     </div>
 
     <!-- Divider -->
-    <div class="flex items-center gap-3 mb-4">
-      <div class="flex-1 h-px bg-slate-200"></div>
-      <p class="text-xs text-slate-400 font-semibold uppercase tracking-wide" id="label-or-child"></p>
-      <div class="flex-1 h-px bg-slate-200"></div>
+    <div style="display:flex;align-items:center;gap:10px;margin:16px 0;">
+      <div style="flex:1;height:1px;background:var(--border);"></div>
+      <span id="label-or-child" class="ui-label"></span>
+      <div style="flex:1;height:1px;background:var(--border);"></div>
     </div>
 
-    <!-- Card: Create child -->
-    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4">
-      <p class="text-sm font-semibold text-slate-700 mb-3" id="create-child-heading"></p>
-      <input
-        type="text"
-        id="new-child-name"
-        class="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300 mb-3"
-        id="new-child-name"
-      />
-      <button
-        onclick="createChild()"
-        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition"
-        id="btn-create-child"
-      ></button>
-      <p id="create-error" class="text-sm mt-2 hidden"></p>
+    <!-- Create child -->
+    <div class="card p-5 mb-3">
+      <p id="create-child-heading" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.6875rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-2);margin-bottom:10px;"></p>
+      <input type="text" id="new-child-name" class="field" style="margin-bottom:10px;" />
+      <button onclick="createChild()" class="btn-primary" id="btn-create-child"></button>
+      <p id="create-error" class="hidden" style="font-size:0.8125rem;color:var(--accent);margin-top:6px;font-style:italic;"></p>
     </div>
 
-    <!-- Card: Join with code -->
-    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-      <p class="text-sm font-semibold text-slate-700 mb-3" id="join-child-heading"></p>
-      <input
-        type="text"
-        id="join-code"
-        maxlength="6"
-        class="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300 mb-3 font-mono uppercase tracking-widest"
-        oninput="this.value = this.value.toUpperCase()"
-      />
-      <button
-        onclick="joinChild()"
-        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition"
-        id="btn-join-child"
-      ></button>
-      <p id="join-error" class="text-sm mt-2 hidden"></p>
+    <!-- Join with code -->
+    <div class="card p-5">
+      <p id="join-child-heading" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.6875rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-2);margin-bottom:10px;"></p>
+      <input type="text" id="join-code" maxlength="6" class="field" style="font-family:'Syne',sans-serif;font-weight:800;letter-spacing:0.25em;text-transform:uppercase;text-align:center;margin-bottom:10px;" oninput="this.value = this.value.toUpperCase()" />
+      <button onclick="joinChild()" class="btn-primary" id="btn-join-child"></button>
+      <p id="join-error" class="hidden" style="font-size:0.8125rem;color:var(--accent);margin-top:6px;font-style:italic;"></p>
     </div>
   </div>
 </div>
 
 <!-- ===== SCREEN: APP ===== -->
 <div id="screen-app" class="hidden">
+
   <!-- Header -->
-  <header class="sticky top-0 z-10" style="background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%); box-shadow: 0 2px 12px rgba(79,70,229,0.18);">
-    <div class="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
-      <h1 class="text-lg font-bold text-white" id="app-title"></h1>
-      <!-- Child badge (center) -->
-      <div class="absolute left-1/2 -translate-x-1/2">
-        <button
-          id="child-badge"
-          onclick="cycleChild()"
-          class="text-white text-xs font-semibold px-3 py-1 rounded-full transition"
-          style="background: rgba(255,255,255,0.2); backdrop-filter: blur(4px);"
-          title="Bytt barn / Switch child"
-        ></button>
+  <header style="position:sticky;top:0;z-index:20;background:var(--surface);border-bottom:1px solid var(--border);">
+    <div style="max-width:540px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;position:relative;">
+      <h1 id="app-title" style="font-family:'Syne',sans-serif;font-weight:800;font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-1);"></h1>
+      <div style="position:absolute;left:50%;transform:translateX(-50%);">
+        <button id="child-badge" onclick="cycleChild()" class="child-badge"></button>
       </div>
-      <div class="flex items-center gap-2">
-        <button
-          id="app-lang-btn"
-          onclick="toggleLang()"
-          class="text-xs font-semibold px-2.5 py-1 rounded-lg text-white/80 hover:text-white transition"
-          style="border: 1px solid rgba(255,255,255,0.3);"
-        ></button>
-        <img id="user-avatar" src="" alt="" class="w-8 h-8 rounded-full border-2 border-white/40 object-cover hidden" />
-        <div id="user-avatar-fallback" class="w-8 h-8 rounded-full flex items-center justify-center text-indigo-700 text-xs font-bold hidden" style="background: rgba(255,255,255,0.9);"></div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button id="app-lang-btn" onclick="toggleLang()" class="btn-ghost"></button>
+        <img id="user-avatar" src="" alt="" class="hidden" style="width:26px;height:26px;border-radius:50%;object-fit:cover;border:1px solid var(--border);" />
+        <div id="user-avatar-fallback" class="hidden" style="width:26px;height:26px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-family:'Syne',sans-serif;font-weight:800;font-size:0.6875rem;display:flex;align-items:center;justify-content:center;"></div>
       </div>
     </div>
   </header>
 
   <!-- Tabs -->
-  <div class="bg-white border-b border-slate-200 sticky top-[57px] z-10">
-    <div class="max-w-lg mx-auto px-4 flex">
-      <button id="tab-new-btn" onclick="switchTab('new')" class="tab-btn flex-1 py-3 text-sm font-semibold border-b-2 transition" data-tab="new"></button>
-      <button id="tab-history-btn" onclick="switchTab('history')" class="tab-btn flex-1 py-3 text-sm font-semibold border-b-2 transition" data-tab="history"></button>
-      <button id="tab-settings-btn" onclick="switchTab('settings')" class="tab-btn flex-1 py-3 text-sm font-semibold border-b-2 transition" data-tab="settings"></button>
+  <div style="position:sticky;top:47px;z-index:10;background:var(--surface);border-bottom:1px solid var(--border);">
+    <div style="max-width:540px;margin:0 auto;padding:0 16px;display:flex;">
+      <button id="tab-new-btn"      onclick="switchTab('new')"      class="tab-btn" data-tab="new"></button>
+      <button id="tab-history-btn"  onclick="switchTab('history')"  class="tab-btn" data-tab="history"></button>
+      <button id="tab-settings-btn" onclick="switchTab('settings')" class="tab-btn" data-tab="settings"></button>
     </div>
   </div>
 
-  <!-- Tab content -->
-  <main class="max-w-lg mx-auto px-4 py-6">
+  <!-- Content -->
+  <main style="max-width:540px;margin:0 auto;padding:20px 16px 40px;">
 
     <!-- ===== TAB: NEW ENTRY ===== -->
     <div id="tab-new" class="tab-panel">
-      <!-- Person switcher (shown when multiple people) -->
-      <div id="person-switcher" class="mb-4"></div>
-      <form id="entry-form" onsubmit="handleSaveEntry(event)">
+      <div id="person-switcher" style="margin-bottom:14px;"></div>
+      <form id="entry-form" onsubmit="handleSaveEntry(event)" style="display:flex;flex-direction:column;gap:10px;">
+
         <!-- Date -->
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4">
-          <label class="block text-xs uppercase tracking-wide text-slate-400 font-semibold mb-2" id="label-date"></label>
-          <input
-            type="date"
-            id="entry-date"
-            class="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-            required
-            onchange="onDateChange(this.value)"
-          />
+        <div class="card p-4">
+          <label class="ui-label" id="label-date" style="display:block;margin-bottom:8px;"></label>
+          <input type="date" id="entry-date" class="field" required onchange="onDateChange(this.value)" />
         </div>
 
         <!-- SECTION: Before bedtime -->
-        <div class="mb-2 mt-5 px-1 flex items-center gap-2">
-          <div class="w-0.5 h-4 bg-indigo-400 rounded-full"></div>
-          <p class="text-xs uppercase tracking-wide text-slate-400 font-semibold" id="section-before"></p>
+        <div class="section-rule">
+          <span class="accent-label" id="section-before"></span>
         </div>
 
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4 space-y-5">
-          <!-- Q1: Daytime functioning -->
+        <div class="card p-4" style="display:flex;flex-direction:column;gap:18px;">
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-2" id="label-q1"></label>
-            <div class="flex flex-wrap gap-2" id="q1-radios"></div>
+            <label style="display:block;font-size:1.0625rem;font-weight:500;color:var(--text-1);margin-bottom:10px;font-style:italic;" id="label-q1"></label>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;" id="q1-radios"></div>
           </div>
-
-          <!-- Q2: Naps -->
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-2" id="label-q2"></label>
-            <div class="flex gap-4 mb-2">
-              <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-                <input type="radio" name="nap" value="yes" id="nap-yes" onchange="toggleNapTimes()" class="accent-indigo-600" />
+            <label style="display:block;font-size:1.0625rem;font-weight:500;color:var(--text-1);margin-bottom:10px;font-style:italic;" id="label-q2"></label>
+            <div style="display:flex;gap:8px;margin-bottom:8px;">
+              <label class="yn-opt" id="yn-label-yes">
+                <input type="radio" name="nap" value="yes" id="nap-yes" onchange="toggleNapTimes(); updateYnStyles()" style="display:none;" />
                 <span id="label-yes"></span>
               </label>
-              <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-                <input type="radio" name="nap" value="no" id="nap-no" onchange="toggleNapTimes()" class="accent-indigo-600" />
+              <label class="yn-opt" id="yn-label-no">
+                <input type="radio" name="nap" value="no" id="nap-no" onchange="toggleNapTimes(); updateYnStyles()" style="display:none;" />
                 <span id="label-no"></span>
               </label>
             </div>
             <div id="nap-times-wrap" class="hidden">
-              <textarea
-                id="nap-times"
-                rows="2"
-                class="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
-              ></textarea>
+              <textarea id="nap-times" rows="2" class="field" style="resize:none;"></textarea>
             </div>
           </div>
-
-          <!-- Q3: Medication (optional) -->
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-2" id="label-q3"></label>
-            <input
-              type="text"
-              id="medication"
-              class="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-            />
+            <label style="display:block;font-size:1.0625rem;font-weight:500;color:var(--text-1);margin-bottom:10px;font-style:italic;" id="label-q3"></label>
+            <input type="text" id="medication" class="field" />
           </div>
         </div>
 
         <!-- SECTION: Morning -->
-        <div class="mb-2 mt-5 px-1 flex items-center gap-2">
-          <div class="w-0.5 h-4 bg-indigo-400 rounded-full"></div>
-          <p class="text-xs uppercase tracking-wide text-slate-400 font-semibold" id="section-morning"></p>
+        <div class="section-rule">
+          <span class="accent-label" id="section-morning"></span>
         </div>
 
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4 space-y-5">
-          <!-- Q4: Bedtime (two times side by side) -->
+        <div class="card p-4" style="display:flex;flex-direction:column;gap:18px;">
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-2" id="label-q4"></label>
-            <div class="grid grid-cols-2 gap-3">
+            <label style="display:block;font-size:1.0625rem;font-weight:500;color:var(--text-1);margin-bottom:10px;font-style:italic;" id="label-q4"></label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
               <div>
-                <p class="text-xs text-slate-400 mb-1" id="label-in-bed"></p>
-                <input
-                  type="time"
-                  id="time-in-bed"
-                  class="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                />
+                <p class="ui-label" id="label-in-bed" style="margin-bottom:6px;"></p>
+                <input type="time" id="time-in-bed" class="field" />
               </div>
               <div>
-                <p class="text-xs text-slate-400 mb-1" id="label-sleep-attempt"></p>
-                <input
-                  type="time"
-                  id="time-sleep-attempt"
-                  class="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                />
+                <p class="ui-label" id="label-sleep-attempt" style="margin-bottom:6px;"></p>
+                <input type="time" id="time-sleep-attempt" class="field" />
               </div>
             </div>
           </div>
-
-          <!-- Q5: Time to fall asleep -->
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-2" id="label-q5"></label>
-            <div class="flex items-center gap-2">
-              <input
-                type="number"
-                id="sleep-onset"
-                min="0"
-                max="999"
-                class="w-24 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-              />
-              <span class="text-sm text-slate-500" id="label-minutes-1"></span>
+            <label style="display:block;font-size:1.0625rem;font-weight:500;color:var(--text-1);margin-bottom:10px;font-style:italic;" id="label-q5"></label>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <input type="number" id="sleep-onset" min="0" max="999" class="field" style="width:80px;" />
+              <span style="font-size:0.875rem;color:var(--text-3);font-style:italic;" id="label-minutes-1"></span>
             </div>
           </div>
-
-          <!-- Q6: Number of awakenings -->
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-2" id="label-q6"></label>
-            <input
-              type="number"
-              id="awakenings-count"
-              min="0"
-              max="99"
-              class="w-24 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-            />
+            <label style="display:block;font-size:1.0625rem;font-weight:500;color:var(--text-1);margin-bottom:10px;font-style:italic;" id="label-q6"></label>
+            <input type="number" id="awakenings-count" min="0" max="99" class="field" style="width:80px;" />
           </div>
-
-          <!-- Q7: Total wake time -->
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-2" id="label-q7"></label>
-            <div class="flex items-center gap-2">
-              <input
-                type="number"
-                id="wake-time"
-                min="0"
-                max="999"
-                class="w-24 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-              />
-              <span class="text-sm text-slate-500" id="label-minutes-2"></span>
+            <label style="display:block;font-size:1.0625rem;font-weight:500;color:var(--text-1);margin-bottom:10px;font-style:italic;" id="label-q7"></label>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <input type="number" id="wake-time" min="0" max="999" class="field" style="width:80px;" />
+              <span style="font-size:0.875rem;color:var(--text-3);font-style:italic;" id="label-minutes-2"></span>
             </div>
           </div>
-
-          <!-- Q8: Final morning awakening -->
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-2" id="label-q8"></label>
-            <input
-              type="time"
-              id="final-awakening"
-              class="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-            />
+            <label style="display:block;font-size:1.0625rem;font-weight:500;color:var(--text-1);margin-bottom:10px;font-style:italic;" id="label-q8"></label>
+            <input type="time" id="final-awakening" class="field" />
           </div>
-
-          <!-- Q9: Got up time -->
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-2" id="label-q9"></label>
-            <input
-              type="time"
-              id="got-up"
-              class="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-            />
+            <label style="display:block;font-size:1.0625rem;font-weight:500;color:var(--text-1);margin-bottom:10px;font-style:italic;" id="label-q9"></label>
+            <input type="time" id="got-up" class="field" />
           </div>
-
-          <!-- Q10: Sleep quality -->
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-2" id="label-q10"></label>
-            <div class="flex flex-wrap gap-2" id="q10-radios"></div>
+            <label style="display:block;font-size:1.0625rem;font-weight:500;color:var(--text-1);margin-bottom:10px;font-style:italic;" id="label-q10"></label>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;" id="q10-radios"></div>
           </div>
         </div>
 
-        <!-- Save button -->
-        <button
-          type="submit"
-          class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition mt-2"
-          id="btn-save-entry"
-        ></button>
-        <p id="entry-feedback" class="text-center text-sm text-green-600 mt-2 hidden"></p>
+        <button type="submit" class="btn-primary" id="btn-save-entry" style="margin-top:4px;"></button>
+        <p id="entry-feedback" class="hidden" style="text-align:center;font-size:0.875rem;font-style:italic;margin-top:2px;"></p>
       </form>
     </div>
 
     <!-- ===== TAB: HISTORY ===== -->
     <div id="tab-history" class="tab-panel hidden">
-      <div id="history-list" class="space-y-4"></div>
-      <p id="history-empty" class="text-center text-slate-400 text-sm py-10 hidden"></p>
+      <div id="history-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+      <p id="history-empty" class="hidden" style="text-align:center;color:var(--text-3);font-size:0.9375rem;font-style:italic;padding:40px 0;"></p>
     </div>
 
     <!-- ===== TAB: SETTINGS ===== -->
-    <div id="tab-settings" class="tab-panel hidden">
+    <div id="tab-settings" class="tab-panel hidden" style="display:flex;flex-direction:column;gap:10px;">
 
-      <!-- Section 1: This child -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4 space-y-3">
-        <p class="text-xs uppercase tracking-wide text-slate-400 font-semibold" id="label-this-child"></p>
-        <p id="settings-child-name" class="text-base font-semibold text-slate-800"></p>
+      <div class="card p-4" style="display:flex;flex-direction:column;gap:12px;">
+        <p class="ui-label" id="label-this-child"></p>
+        <p id="settings-child-name" style="font-size:1.125rem;font-weight:600;color:var(--text-1);"></p>
         <div>
-          <p class="text-xs uppercase tracking-wide text-slate-400 font-semibold mb-2" id="label-share-code"></p>
-          <div class="flex items-center gap-3">
-            <span id="share-code-display" class="font-mono text-lg tracking-widest font-bold text-indigo-700 bg-indigo-50 rounded-xl px-4 py-2"></span>
-            <button
-              onclick="copyShareCode()"
-              class="text-sm font-medium px-3 py-2 rounded-xl border border-indigo-200 text-indigo-600 hover:bg-indigo-50 transition"
-              id="btn-copy-code"
-            ></button>
+          <p class="ui-label" id="label-share-code" style="margin-bottom:8px;"></p>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span id="share-code-display" class="share-code"></span>
+            <button onclick="copyShareCode()" id="btn-copy-code" class="btn-ghost"></button>
           </div>
-          <p class="text-xs text-slate-400 mt-2" id="share-code-hint"></p>
-          <p id="code-copied" class="text-xs text-green-600 mt-1 hidden"></p>
-          <div id="members-list" class="mt-3 space-y-2"></div>
+          <p style="font-size:0.75rem;color:var(--text-3);margin-top:6px;font-style:italic;" id="share-code-hint"></p>
+          <p id="code-copied" class="hidden" style="font-size:0.75rem;color:var(--green);margin-top:4px;"></p>
+          <div id="members-list" style="margin-top:10px;display:flex;flex-direction:column;gap:6px;"></div>
         </div>
       </div>
 
-      <!-- Section 2: Children list (only shown if >1 child) -->
-      <div id="settings-children-section" class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4 hidden">
-        <p class="text-xs uppercase tracking-wide text-slate-400 font-semibold mb-3" id="label-children-section"></p>
-        <div id="settings-children-list" class="space-y-2"></div>
+      <div id="settings-children-section" class="card p-4 hidden">
+        <p class="ui-label" id="label-children-section" style="margin-bottom:12px;"></p>
+        <div id="settings-children-list" style="display:flex;flex-direction:column;gap:8px;"></div>
       </div>
 
-      <!-- Section 3: Add child -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4">
-        <button
-          onclick="showScreen('children')"
-          class="w-full bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold py-3 rounded-xl border border-slate-200 transition"
-          id="btn-add-child"
-        ></button>
+      <div class="card p-4">
+        <button onclick="showScreen('children')" id="btn-add-child" style="width:100%;background:none;border:none;font-family:'Syne',sans-serif;font-weight:700;font-size:0.6875rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-2);cursor:pointer;padding:4px 0;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-2)'"></button>
       </div>
 
-      <!-- Section 4: Account -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4">
-        <p class="text-xs uppercase tracking-wide text-slate-400 font-semibold mb-1" id="label-account"></p>
-        <p id="user-email" class="text-sm text-slate-400"></p>
+      <div class="card p-4">
+        <p class="ui-label" id="label-account" style="margin-bottom:4px;"></p>
+        <p id="user-email" style="font-size:0.875rem;color:var(--text-2);font-style:italic;"></p>
       </div>
 
-      <button
-        onclick="signOut()"
-        class="w-full bg-red-50 hover:bg-red-100 text-red-600 font-semibold py-3 rounded-xl border border-red-100 transition"
-        id="btn-sign-out"
-      ></button>
+      <button onclick="signOut()" class="btn-danger" id="btn-sign-out"></button>
     </div>
 
   </main>
@@ -506,185 +660,98 @@ create policy "Members manage entries" on sleep_entries
   // CLIENT
   // ============================================================
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
-    auth: {
-      flowType: 'implicit',
-      detectSessionInUrl: true,
-      persistSession: true,
-    }
+    auth: { flowType: 'implicit', detectSessionInUrl: true, persistSession: true }
   });
 
   // ============================================================
   // STATE
   // ============================================================
-  let user         = null;
-  let children     = [];
-  let currentChild = null;
-  let lang         = localStorage.getItem('sovn-lang') || 'no';
-  let currentTab   = 'new';
-  let entries      = [];
+  let user           = null;
+  let children       = [];
+  let currentChild   = null;
+  let lang           = localStorage.getItem('sovn-lang') || 'no';
+  let currentTab     = 'new';
+  let entries        = [];
+  const expandedEntries = new Set();
 
-  function isSelf() {
-    return currentChild && currentChild.id === localStorage.getItem('sovn-self-id');
-  }
-
-  function getChildName() {
-    return currentChild?.name || (lang === 'no' ? 'barnet' : 'your child');
-  }
+  function isSelf() { return currentChild && currentChild.id === localStorage.getItem('sovn-self-id'); }
+  function getChildName() { return currentChild?.name || (lang === 'no' ? 'barnet' : 'your child'); }
 
   // ============================================================
   // TRANSLATIONS
   // ============================================================
   const T = {
     no: {
-      appTitle:           'Søvndagbok',
-      authTitle:          'Søvndagbok',
-      signInGoogle:       'Logg inn med Google',
-      langSwitch:         'EN',
-      tabNew:             'Ny registrering',
-      tabHistory:         'Historikk',
-      tabSettings:        'Innstillinger',
-      labelDate:          'Dato',
-      sectionBefore:      'Fylles ut før leggetid',
-      sectionMorning:     'Fylles ut om morgenen',
-      q1:                 (name, self) => self ? 'Hvordan har du fungert på dagtid?' : `Hvordan har ${name} fungert på dagtid?`,
-      q1Scale:            ['1 – Svært bra', '2 – Bra', '3 – Middels', '4 – Dårlig', '5 – Svært dårlig'],
-      q2:                 (name, self) => self ? 'Har du sovet på dagtid?' : `Har ${name} sovet på dagtid?`,
-      q2NapTimes:         'Oppgi tidspunkt og varighet',
-      q3:                 (name, self) => self ? 'Medikament (valgfritt)' : `Medikament gitt til ${name} (valgfritt)`,
-      q4:                 (name, self) => self ? 'Når la du deg?' : `Når la du ${name}?`,
-      labelInBed:         'La seg',
-      labelSleepAttempt:  'Prøvde å sove',
-      q5:                 (name, self) => self ? 'Hvor lang tid brukte du på å sovne?' : `Hvor lang tid brukte ${name} på å sovne?`,
-      minutes:            'minutter',
-      q6:                 (name, self) => self ? 'Hvor mange ganger våknet du i løpet av natten?' : `Hvor mange ganger våknet ${name} i løpet av natten?`,
-      q7:                 (name, self) => self ? 'Hvor lenge var du våken totalt ved nattlige oppvåkninger?' : `Hvor lenge var ${name} våken totalt ved nattlige oppvåkninger?`,
-      q8:                 (name, self) => self ? 'Når våknet du endelig om morgenen?' : `Når våknet ${name} endelig om morgenen?`,
-      q9:                 (name, self) => self ? 'Når stod du opp?' : `Når stod ${name} opp?`,
-      q10:                (name, self) => self ? 'Hvordan vurderer du din søvnkvalitet?' : `Hvordan vurderer du søvnkvaliteten til ${name}?`,
-      q10Scale:           ['1 – Svært lett', '2 – Lett', '3 – Middels', '4 – Dyp', '5 – Svært dyp'],
-      yes:                'Ja',
-      no_:                'Nei',
-      saveEntry:          'Lagre registrering',
-      entrySaved:         'Registrering lagret!',
-      accountLabel:       'Konto',
-      signOut:            'Logg ut',
-      editBtn:            'Rediger',
-      deleteBtn:          'Slett',
-      historyEmpty:       'Ingen registreringer enda.',
-      fallbackChild:      'barnet',
-      confirmDelete:      'Slett denne registreringen?',
-      fieldNap:           'Dagsøvn',
-      fieldNapTimes:      'Tidspunkt dagsøvn',
-      fieldMed:           'Medikament',
-      fieldInBed:         'La seg',
-      fieldSleepAttempt:  'Prøvde å sove',
-      fieldOnset:         'Innsovningstid',
-      fieldAwakenings:    'Oppvåkninger',
-      fieldWakeTime:      'Våken tid natt',
-      fieldFinalWake:     'Siste oppvåkning',
-      fieldGotUp:         'Stod opp',
-      fieldQ1:            'Dagtidsfungering',
-      fieldQ10:           'Søvnkvalitet',
-      minutesSuffix:      ' min',
-      createChild:        'Legg til barn',
-      joinChild:          'Bli med via kode',
-      childNamePlaceholder: 'Navn på barnet',
-      codePlaceholder:    'XXXXXX',
-      createBtn:          'Legg til',
-      joinBtn:            'Bli med',
-      shareCodeLabel:     'Delingskode',
-      shareCodeHint:      'Del denne koden med den andre foresatte',
-      shareCodeHintSelf:  'Del koden med legen eller noen du vil gi tilgang',
-      copyCode:           'Kopier',
-      addChildBtn:        'Legg til person',
-      thisChild:          'Dette barnet',
-      thisChildSelf:      'Deg selv',
-      backLink:           '← Tilbake',
-      switchChild:        'Bytt',
-      signOutSmall:       'Logg ut',
-      childrenSection:    'Personer',
-      createSelf:         'Registrer min søvn',
-      createSelfDesc:     'Logg din egen søvn – for deg selv',
-      createSelfBtn:      'Legg til meg selv',
-      orChild:            'eller legg til barn',
-      myselfLabel:        'Meg selv',
+      appTitle:'Søvndagbok',authTitle:'Søvndagbok',signInGoogle:'Logg inn med Google',langSwitch:'EN',
+      tabNew:'Ny registrering',tabHistory:'Historikk',tabSettings:'Innstillinger',
+      labelDate:'Dato',sectionBefore:'Fylles ut før leggetid',sectionMorning:'Fylles ut om morgenen',
+      q1:(n,s)=>s?'Hvordan har du fungert på dagtid?':`Hvordan har ${n} fungert på dagtid?`,
+      q1Scale:['1 – Svært bra','2 – Bra','3 – Middels','4 – Dårlig','5 – Svært dårlig'],
+      q2:(n,s)=>s?'Har du sovet på dagtid?':`Har ${n} sovet på dagtid?`,
+      q2NapTimes:'Oppgi tidspunkt og varighet',
+      q3:(n,s)=>s?'Medikament (valgfritt)':`Medikament gitt til ${n} (valgfritt)`,
+      q4:(n,s)=>s?'Når la du deg?':`Når la du ${n}?`,
+      labelInBed:'La seg',labelSleepAttempt:'Prøvde å sove',
+      q5:(n,s)=>s?'Hvor lang tid brukte du på å sovne?':`Hvor lang tid brukte ${n} på å sovne?`,
+      minutes:'minutter',
+      q6:(n,s)=>s?'Hvor mange ganger våknet du i løpet av natten?':`Hvor mange ganger våknet ${n} i løpet av natten?`,
+      q7:(n,s)=>s?'Hvor lenge var du våken totalt ved nattlige oppvåkninger?':`Hvor lenge var ${n} våken totalt ved nattlige oppvåkninger?`,
+      q8:(n,s)=>s?'Når våknet du endelig om morgenen?':`Når våknet ${n} endelig om morgenen?`,
+      q9:(n,s)=>s?'Når stod du opp?':`Når stod ${n} opp?`,
+      q10:(n,s)=>s?'Hvordan vurderer du din søvnkvalitet?':`Hvordan vurderer du søvnkvaliteten til ${n}?`,
+      q10Scale:['1 – Svært lett','2 – Lett','3 – Middels','4 – Dyp','5 – Svært dyp'],
+      yes:'Ja',no_:'Nei',saveEntry:'Lagre registrering',entrySaved:'Registrering lagret.',
+      accountLabel:'Konto',signOut:'Logg ut',editBtn:'Rediger',deleteBtn:'Slett',
+      historyEmpty:'Ingen registreringer enda.',fallbackChild:'barnet',confirmDelete:'Slett denne registreringen?',
+      fieldNap:'Dagsøvn',fieldNapTimes:'Tidspunkt dagsøvn',fieldMed:'Medikament',
+      fieldInBed:'La seg',fieldSleepAttempt:'Prøvde å sove',fieldOnset:'Innsovningstid',
+      fieldAwakenings:'Oppvåkninger',fieldWakeTime:'Våken tid natt',fieldFinalWake:'Siste oppvåkning',
+      fieldGotUp:'Stod opp',fieldQ1:'Dagtidsfungering',fieldQ10:'Søvnkvalitet',minutesSuffix:' min',
+      createChild:'Legg til barn',joinChild:'Bli med via kode',childNamePlaceholder:'Navn på barnet',
+      codePlaceholder:'XXXXXX',createBtn:'Legg til',joinBtn:'Bli med',
+      shareCodeLabel:'Delingskode',shareCodeHint:'Del denne koden med den andre foresatte',
+      shareCodeHintSelf:'Del koden med legen eller noen du vil gi tilgang',copyCode:'Kopier',
+      addChildBtn:'+ Legg til person',thisChild:'Dette barnet',thisChildSelf:'Deg selv',
+      backLink:'← Tilbake',switchChild:'Bytt',signOutSmall:'Logg ut',childrenSection:'Personer',
+      createSelf:'Registrer min søvn',createSelfDesc:'Logg din egen søvn – for deg selv',
+      createSelfBtn:'Legg til meg selv',orChild:'eller legg til barn',myselfLabel:'Meg selv',
     },
     en: {
-      appTitle:           'Sleep Diary',
-      authTitle:          'Sleep Diary',
-      signInGoogle:       'Sign in with Google',
-      langSwitch:         'NO',
-      tabNew:             'New entry',
-      tabHistory:         'History',
-      tabSettings:        'Settings',
-      labelDate:          'Date',
-      sectionBefore:      'Fill out before bedtime',
-      sectionMorning:     'Fill out in the morning',
-      q1:                 (name, self) => self ? 'How did you function during the day?' : `How did ${name} function during the day?`,
-      q1Scale:            ['1 – Very good', '2 – Good', '3 – Moderate', '4 – Poor', '5 – Very poor'],
-      q2:                 (name, self) => self ? 'Did you nap during the day?' : `Did ${name} nap during the day?`,
-      q2NapTimes:         'Enter times and duration',
-      q3:                 (name, self) => self ? 'Medication (optional)' : `Medication given to ${name} (optional)`,
-      q4:                 (name, self) => self ? 'When did you go to bed?' : `When did you put ${name} to bed?`,
-      labelInBed:         'In bed',
-      labelSleepAttempt:  'Tried to sleep',
-      q5:                 (name, self) => self ? 'How long did it take you to fall asleep?' : `How long did it take ${name} to fall asleep?`,
-      minutes:            'minutes',
-      q6:                 (name, self) => self ? 'How many times did you wake up during the night?' : `How many times did ${name} wake up during the night?`,
-      q7:                 (name, self) => self ? 'How long were you awake in total during nighttime awakenings?' : `How long was ${name} awake in total during nighttime awakenings?`,
-      q8:                 (name, self) => self ? 'When did you wake up for good in the morning?' : `When did ${name} wake up for good in the morning?`,
-      q9:                 (name, self) => self ? 'When did you get up?' : `When did ${name} get up?`,
-      q10:                (name, self) => self ? 'How do you rate your sleep quality?' : `How do you rate ${name}'s sleep quality?`,
-      q10Scale:           ['1 – Very light', '2 – Light', '3 – Moderate', '4 – Deep', '5 – Very deep'],
-      yes:                'Yes',
-      no_:                'No',
-      saveEntry:          'Save entry',
-      entrySaved:         'Entry saved!',
-      accountLabel:       'Account',
-      signOut:            'Sign out',
-      editBtn:            'Edit',
-      deleteBtn:          'Delete',
-      historyEmpty:       'No entries yet.',
-      fallbackChild:      'your child',
-      confirmDelete:      'Delete this entry?',
-      fieldNap:           'Nap',
-      fieldNapTimes:      'Nap times',
-      fieldMed:           'Medication',
-      fieldInBed:         'In bed',
-      fieldSleepAttempt:  'Tried to sleep',
-      fieldOnset:         'Sleep onset',
-      fieldAwakenings:    'Awakenings',
-      fieldWakeTime:      'Awake time (night)',
-      fieldFinalWake:     'Final awakening',
-      fieldGotUp:         'Got up',
-      fieldQ1:            'Daytime functioning',
-      fieldQ10:           'Sleep quality',
-      minutesSuffix:      ' min',
-      createChild:        'Add a child',
-      joinChild:          'Join with code',
-      childNamePlaceholder: "Child's name",
-      codePlaceholder:    'XXXXXX',
-      createBtn:          'Add',
-      joinBtn:            'Join',
-      shareCodeLabel:     'Share code',
-      shareCodeHint:      'Share this code with the other parent',
-      shareCodeHintSelf:  'Share with your doctor or someone you want to give access',
-      copyCode:           'Copy',
-      addChildBtn:        'Add person',
-      thisChild:          'This child',
-      thisChildSelf:      'Yourself',
-      backLink:           '← Back',
-      switchChild:        'Switch',
-      signOutSmall:       'Sign out',
-      childrenSection:    'People',
-      createSelf:         'Track my own sleep',
-      createSelfDesc:     'Log your own sleep — for yourself',
-      createSelfBtn:      'Add myself',
-      orChild:            'or add a child',
-      myselfLabel:        'Myself',
+      appTitle:'Sleep Diary',authTitle:'Sleep Diary',signInGoogle:'Sign in with Google',langSwitch:'NO',
+      tabNew:'New entry',tabHistory:'History',tabSettings:'Settings',
+      labelDate:'Date',sectionBefore:'Fill out before bedtime',sectionMorning:'Fill out in the morning',
+      q1:(n,s)=>s?'How did you function during the day?':`How did ${n} function during the day?`,
+      q1Scale:['1 – Very good','2 – Good','3 – Moderate','4 – Poor','5 – Very poor'],
+      q2:(n,s)=>s?'Did you nap during the day?':`Did ${n} nap during the day?`,
+      q2NapTimes:'Enter times and duration',
+      q3:(n,s)=>s?'Medication (optional)':`Medication given to ${n} (optional)`,
+      q4:(n,s)=>s?'When did you go to bed?':`When did you put ${n} to bed?`,
+      labelInBed:'In bed',labelSleepAttempt:'Tried to sleep',
+      q5:(n,s)=>s?'How long did it take you to fall asleep?':`How long did it take ${n} to fall asleep?`,
+      minutes:'minutes',
+      q6:(n,s)=>s?'How many times did you wake up during the night?':`How many times did ${n} wake up during the night?`,
+      q7:(n,s)=>s?'How long were you awake in total during nighttime awakenings?':`How long was ${n} awake in total during nighttime awakenings?`,
+      q8:(n,s)=>s?'When did you wake up for good in the morning?':`When did ${n} wake up for good in the morning?`,
+      q9:(n,s)=>s?'When did you get up?':`When did ${n} get up?`,
+      q10:(n,s)=>s?'How do you rate your sleep quality?':`How do you rate ${n}'s sleep quality?`,
+      q10Scale:['1 – Very light','2 – Light','3 – Moderate','4 – Deep','5 – Very deep'],
+      yes:'Yes',no_:'No',saveEntry:'Save entry',entrySaved:'Entry saved.',
+      accountLabel:'Account',signOut:'Sign out',editBtn:'Edit',deleteBtn:'Delete',
+      historyEmpty:'No entries yet.',fallbackChild:'your child',confirmDelete:'Delete this entry?',
+      fieldNap:'Nap',fieldNapTimes:'Nap times',fieldMed:'Medication',
+      fieldInBed:'In bed',fieldSleepAttempt:'Tried to sleep',fieldOnset:'Sleep onset',
+      fieldAwakenings:'Awakenings',fieldWakeTime:'Awake time (night)',fieldFinalWake:'Final awakening',
+      fieldGotUp:'Got up',fieldQ1:'Daytime functioning',fieldQ10:'Sleep quality',minutesSuffix:' min',
+      createChild:'Add a child',joinChild:'Join with code',childNamePlaceholder:"Child's name",
+      codePlaceholder:'XXXXXX',createBtn:'Add',joinBtn:'Join',
+      shareCodeLabel:'Share code',shareCodeHint:'Share this code with the other parent',
+      shareCodeHintSelf:'Share with your doctor or someone you want to give access',copyCode:'Copy',
+      addChildBtn:'+ Add person',thisChild:'This child',thisChildSelf:'Yourself',
+      backLink:'← Back',switchChild:'Switch',signOutSmall:'Sign out',childrenSection:'People',
+      createSelf:'Track my own sleep',createSelfDesc:'Log your own sleep — for yourself',
+      createSelfBtn:'Add myself',orChild:'or add a child',myselfLabel:'Myself',
     }
   };
-
   function t() { return T[lang]; }
 
   // ============================================================
@@ -692,72 +759,42 @@ create policy "Members manage entries" on sleep_entries
   // ============================================================
   document.addEventListener('DOMContentLoaded', async () => {
     const { data: { session } } = await sb.auth.getSession();
-    if (session) {
-      user = session.user;
-      await bootstrap();
-    } else {
-      showScreen('auth');
-      renderLang();
-    }
+    if (session) { user = session.user; await bootstrap(); }
+    else { showScreen('auth'); renderLang(); }
 
     sb.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        user = session.user;
-        await bootstrap();
-      } else if (event === 'SIGNED_OUT') {
-        user         = null;
-        children     = [];
-        currentChild = null;
-        entries      = [];
-        showScreen('auth');
-        renderLang();
+      if (event === 'SIGNED_IN' && session) { user = session.user; await bootstrap(); }
+      else if (event === 'SIGNED_OUT') {
+        user = null; children = []; currentChild = null; entries = [];
+        showScreen('auth'); renderLang();
       }
     });
   });
 
   async function bootstrap() {
-    try {
-      children = await loadChildren();
-    } catch (err) {
+    try { children = await loadChildren(); }
+    catch (err) {
       const el = document.getElementById('loading-error');
-      if (el) {
-        el.textContent = 'Kunne ikke koble til databasen. Sjekk at du har kjørt SQL-oppsettet i Supabase. (' + err.message + ')';
-        el.classList.remove('hidden');
-      }
+      if (el) { el.textContent = 'Kunne ikke koble til databasen. (' + err.message + ')'; el.classList.remove('hidden'); }
       return;
     }
-    if (children.length === 0) {
-      renderLang();
-      renderUserAvatar();
-      showScreen('children');
-      return;
-    }
+    if (children.length === 0) { renderLang(); renderUserAvatar(); showScreen('children'); return; }
     const lastId = localStorage.getItem('sovn-last-child');
     currentChild = children.find(c => c.id === lastId) || children[0];
-    await loadEntries();
-    setTodayDate();
-    renderLang();
-    renderUserAvatar();
-    showScreen('app');
-    renderPersonSwitcher();
-    switchTab('new');
+    await loadEntries(); setTodayDate(); renderLang(); renderUserAvatar();
+    showScreen('app'); renderPersonSwitcher(); switchTab('new');
   }
 
   // ============================================================
   // SCREENS
   // ============================================================
   function showScreen(name) {
-    ['loading', 'auth', 'children', 'app'].forEach(s => {
-      document.getElementById(`screen-${s}`).classList.toggle('hidden', s !== name);
-    });
+    ['loading','auth','children','app'].forEach(s =>
+      document.getElementById(`screen-${s}`).classList.toggle('hidden', s !== name));
     if (name === 'children') {
-      renderLang();
-      renderUserAvatar();
-      // Show back link only if user already has children
-      const backLink = document.getElementById('children-back-link');
-      if (backLink) {
-        backLink.classList.toggle('hidden', children.length === 0);
-      }
+      renderLang(); renderUserAvatar();
+      const b = document.getElementById('children-back-link');
+      if (b) b.classList.toggle('hidden', children.length === 0);
     }
   }
 
@@ -765,55 +802,32 @@ create policy "Members manage entries" on sleep_entries
   // AUTH
   // ============================================================
   async function signInWithGoogle() {
-    await sb.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.origin }
-    });
+    await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
   }
-
-  async function signOut() {
-    await sb.auth.signOut();
-  }
+  async function signOut() { await sb.auth.signOut(); }
 
   // ============================================================
   // CHILDREN
   // ============================================================
-  function sleepQualityEmoji(q10) {
-    return ['😩', '😪', '😐', '🙂', '😊'][q10 - 1] || '';
-  }
-
+  function sleepQualityEmoji(q10) { return ['😩','😪','😐','🙂','😊'][q10-1] || ''; }
   function generateShareCode() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let code = '';
-    for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
-    return code;
+    const c = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let code = '';
+    for (let i = 0; i < 6; i++) code += c[Math.floor(Math.random() * c.length)]; return code;
   }
-
   async function loadChildren() {
-    const { data, error } = await sb.from('child_members')
-      .select('child_id, children(id, name, share_code)')
-      .eq('user_id', user.id);
+    const { data, error } = await sb.from('child_members').select('child_id, children(id, name, share_code)').eq('user_id', user.id);
     if (error) throw error;
     return (data || []).map(r => r.children).filter(Boolean);
   }
-
   async function createChild() {
-    const name = document.getElementById('new-child-name').value.trim();
-    if (!name) return;
-    const shareCode = generateShareCode();
-    const { data, error } = await sb.rpc('create_child', {
-      child_name: name,
-      child_share_code: shareCode
-    });
+    const name = document.getElementById('new-child-name').value.trim(); if (!name) return;
+    const { data, error } = await sb.rpc('create_child', { child_name: name, child_share_code: generateShareCode() });
     if (error) { showFeedback('create-error', error.message, true); return; }
     const child = typeof data === 'string' ? JSON.parse(data) : data;
-    children.push(child);
-    await selectChild(child);
+    children.push(child); await selectChild(child);
   }
-
   async function joinChild() {
-    const code = document.getElementById('join-code').value.trim().toUpperCase();
-    if (code.length !== 6) return;
+    const code = document.getElementById('join-code').value.trim().toUpperCase(); if (code.length !== 6) return;
     const { data, error } = await sb.rpc('join_child', { child_share_code: code });
     if (error) { showFeedback('join-error', error.message, true); return; }
     if (!data) { showFeedback('join-error', lang === 'no' ? 'Fant ingen barn med denne koden.' : 'No child found with this code.', true); return; }
@@ -821,97 +835,64 @@ create policy "Members manage entries" on sleep_entries
     if (!children.find(c => c.id === child.id)) children.push(child);
     await selectChild(child);
   }
-
   async function selectChild(child) {
-    currentChild = child;
-    localStorage.setItem('sovn-last-child', child.id);
-    await loadEntries();
-    setTodayDate();
-    renderLang();
-    renderUserAvatar();
-    showScreen('app');
-    renderPersonSwitcher();
-    switchTab('new');
+    currentChild = child; localStorage.setItem('sovn-last-child', child.id);
+    await loadEntries(); setTodayDate(); renderLang(); renderUserAvatar();
+    showScreen('app'); renderPersonSwitcher(); switchTab('new');
   }
-
   async function cycleChild() {
     if (children.length < 2) return;
     const idx = children.findIndex(c => c.id === currentChild.id);
-    const next = children[(idx + 1) % children.length];
-    await selectChild(next);
+    await selectChild(children[(idx + 1) % children.length]);
   }
-
   async function createSelf() {
     const selfId = localStorage.getItem('sovn-self-id');
-    if (selfId) {
-      const existing = children.find(c => c.id === selfId);
-      if (existing) { await selectChild(existing); return; }
-    }
+    if (selfId) { const e = children.find(c => c.id === selfId); if (e) { await selectChild(e); return; } }
     const name = user?.user_metadata?.full_name || (lang === 'no' ? 'Meg selv' : 'Myself');
-    const shareCode = generateShareCode();
-    const { data, error } = await sb.rpc('create_child', {
-      child_name: name,
-      child_share_code: shareCode
-    });
+    const { data, error } = await sb.rpc('create_child', { child_name: name, child_share_code: generateShareCode() });
     if (error) { showFeedback('create-error', error.message, true); return; }
     const child = typeof data === 'string' ? JSON.parse(data) : data;
-    localStorage.setItem('sovn-self-id', child.id);
-    children.push(child);
-    await selectChild(child);
+    localStorage.setItem('sovn-self-id', child.id); children.push(child); await selectChild(child);
   }
-
   function renderPersonSwitcher() {
     const container = document.getElementById('person-switcher');
     if (!container) return;
-    if (children.length <= 1) {
-      container.innerHTML = '';
-      return;
-    }
+    if (children.length <= 1) { container.innerHTML = ''; return; }
     const selfId = localStorage.getItem('sovn-self-id');
     container.innerHTML = '';
     const wrapper = document.createElement('div');
-    wrapper.className = 'flex flex-wrap gap-2';
+    wrapper.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';
     children.forEach(child => {
-      const isActive = child.id === currentChild?.id;
+      const isActive    = child.id === currentChild?.id;
       const isSelfEntry = child.id === selfId;
       const btn = document.createElement('button');
       btn.type = 'button';
-      const emoji = isSelfEntry ? '👤' : '👶';
-      const label = isSelfEntry ? (lang === 'no' ? 'Meg selv' : 'Myself') : child.name;
-      btn.textContent = `${emoji} ${label}`;
-      btn.className = `px-4 py-2 rounded-xl text-sm font-semibold transition border ${
-        isActive
-          ? 'bg-indigo-600 text-white border-indigo-600'
-          : 'bg-white text-slate-600 border-slate-200 hover:bg-indigo-50 hover:border-indigo-300'
-      }`;
+      btn.textContent = (isSelfEntry ? '👤 ' : '👶 ') + (isSelfEntry ? (lang === 'no' ? 'Meg selv' : 'Myself') : child.name);
+      btn.style.cssText = `font-family:'Syne',sans-serif;font-weight:700;font-size:0.6875rem;letter-spacing:0.05em;text-transform:uppercase;padding:6px 12px;border-radius:6px;cursor:pointer;transition:all 0.15s;border:1px solid ${isActive ? 'var(--accent)' : 'var(--border)'};background:${isActive ? 'var(--accent)' : 'var(--surface)'};color:${isActive ? '#fff' : 'var(--text-2)'};`;
       btn.onclick = () => selectChild(child);
       wrapper.appendChild(btn);
     });
     container.appendChild(wrapper);
   }
-
   async function copyShareCode() {
     if (!currentChild) return;
     await navigator.clipboard.writeText(currentChild.share_code);
     showFeedback('code-copied', lang === 'no' ? 'Kopiert!' : 'Copied!');
   }
-
   async function loadMembers() {
     const { data } = await sb.rpc('get_child_members', { p_child_id: currentChild.id });
     return (typeof data === 'string' ? JSON.parse(data) : data) || [];
   }
-
   function renderMembersList(members) {
-    const container = document.getElementById('members-list');
-    if (!container) return;
+    const container = document.getElementById('members-list'); if (!container) return;
     container.innerHTML = '';
     members.forEach(m => {
       const row = document.createElement('div');
-      row.className = 'flex items-center gap-2';
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;';
       const img = m.avatar
-        ? `<img src="${m.avatar}" class="w-6 h-6 rounded-full object-cover" />`
-        : `<div class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 text-xs flex items-center justify-center font-semibold">${(m.name || m.email || '?').charAt(0).toUpperCase()}</div>`;
-      row.innerHTML = `${img}<span class="text-sm text-slate-700">${m.name || m.email}</span>`;
+        ? `<img src="${m.avatar}" style="width:22px;height:22px;border-radius:50%;object-fit:cover;" />`
+        : `<div style="width:22px;height:22px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-family:'Syne',sans-serif;font-weight:800;font-size:0.625rem;display:flex;align-items:center;justify-content:center;">${(m.name||m.email||'?').charAt(0).toUpperCase()}</div>`;
+      row.innerHTML = `${img}<span style="font-size:0.8125rem;color:var(--text-2);">${m.name||m.email}</span>`;
       container.appendChild(row);
     });
   }
@@ -921,99 +902,52 @@ create policy "Members manage entries" on sleep_entries
   // ============================================================
   async function loadEntries() {
     if (!currentChild) return;
-    const { data } = await sb.from('sleep_entries')
-      .select('*')
-      .eq('child_id', currentChild.id)
-      .order('date', { ascending: false });
+    const { data } = await sb.from('sleep_entries').select('*').eq('child_id', currentChild.id).order('date', { ascending: false });
     entries = data || [];
   }
-
   async function handleSaveEntry(e) {
     e.preventDefault();
-    if (!currentChild) {
-      showFeedback('entry-feedback', '⚠️ Ingen barn valgt — last siden på nytt.', true);
-      return;
-    }
+    if (!currentChild) { showFeedback('entry-feedback', '⚠️ Ingen barn valgt — last siden på nytt.', true); return; }
     try {
-    const date   = document.getElementById('entry-date').value;
-    const napVal = document.querySelector('input[name="nap"]:checked');
-    const nap    = napVal ? napVal.value === 'yes' : null;
-
-    const q1El  = document.querySelector('input[name="q1"]:checked');
-    const q10El = document.querySelector('input[name="q10"]:checked');
-
-    const payload = {
-      child_id:            currentChild.id,
-      date:                date,
-      q1:                  q1El  ? parseInt(q1El.value)  : null,
-      nap:                 nap,
-      nap_times:           nap === true ? (document.getElementById('nap-times').value.trim() || null) : null,
-      medication:          document.getElementById('medication').value.trim() || null,
-      time_in_bed:         document.getElementById('time-in-bed').value || null,
-      time_sleep_attempt:  document.getElementById('time-sleep-attempt').value || null,
-      sleep_onset:         intOrNull('sleep-onset'),
-      awakenings_count:    intOrNull('awakenings-count'),
-      wake_time:           intOrNull('wake-time'),
-      final_awakening:     document.getElementById('final-awakening').value || null,
-      got_up:              document.getElementById('got-up').value || null,
-      q10:                 q10El ? parseInt(q10El.value) : null,
-      updated_at:          new Date().toISOString(),
-    };
-
-    const { data, error } = await sb
-      .from('sleep_entries')
-      .upsert(payload, { onConflict: 'child_id,date' })
-      .select();
-
-    if (error) {
-      showFeedback('entry-feedback', '⚠️ ' + error.message, true);
-      console.error('Save error:', error);
-      return;
-    }
-
-    const saved = data?.[0] ?? payload;
-    const idx = entries.findIndex(en => en.date === date);
-    if (idx >= 0) entries[idx] = saved;
-    else entries.unshift(saved);
-    entries.sort((a, b) => b.date.localeCompare(a.date));
-    showFeedback('entry-feedback', t().entrySaved);
-    } catch (err) {
-      showFeedback('entry-feedback', '⚠️ ' + err.message, true);
-      console.error('handleSaveEntry crash:', err);
-    }
+      const date   = document.getElementById('entry-date').value;
+      const napVal = document.querySelector('input[name="nap"]:checked');
+      const nap    = napVal ? napVal.value === 'yes' : null;
+      const q1El   = document.querySelector('input[name="q1"]:checked');
+      const q10El  = document.querySelector('input[name="q10"]:checked');
+      const payload = {
+        child_id: currentChild.id, date,
+        q1: q1El ? parseInt(q1El.value) : null, nap,
+        nap_times: nap === true ? (document.getElementById('nap-times').value.trim() || null) : null,
+        medication: document.getElementById('medication').value.trim() || null,
+        time_in_bed: document.getElementById('time-in-bed').value || null,
+        time_sleep_attempt: document.getElementById('time-sleep-attempt').value || null,
+        sleep_onset: intOrNull('sleep-onset'), awakenings_count: intOrNull('awakenings-count'),
+        wake_time: intOrNull('wake-time'), final_awakening: document.getElementById('final-awakening').value || null,
+        got_up: document.getElementById('got-up').value || null,
+        q10: q10El ? parseInt(q10El.value) : null, updated_at: new Date().toISOString(),
+      };
+      const { data, error } = await sb.from('sleep_entries').upsert(payload, { onConflict: 'child_id,date' }).select();
+      if (error) { showFeedback('entry-feedback', '⚠️ ' + error.message, true); return; }
+      const saved = data?.[0] ?? payload;
+      const idx = entries.findIndex(en => en.date === date);
+      if (idx >= 0) entries[idx] = saved; else entries.unshift(saved);
+      entries.sort((a, b) => b.date.localeCompare(a.date));
+      showFeedback('entry-feedback', t().entrySaved);
+    } catch (err) { showFeedback('entry-feedback', '⚠️ ' + err.message, true); console.error(err); }
   }
-
   async function deleteEntry(date) {
     if (!confirm(t().confirmDelete)) return;
-    const { error } = await sb
-      .from('sleep_entries')
-      .delete()
-      .eq('child_id', currentChild.id)
-      .eq('date', date);
-    if (!error) {
-      entries = entries.filter(en => en.date !== date);
-      renderHistory();
-    }
+    const { error } = await sb.from('sleep_entries').delete().eq('child_id', currentChild.id).eq('date', date);
+    if (!error) { entries = entries.filter(en => en.date !== date); renderHistory(); }
   }
-
   function onDateChange(date) {
     if (!date) return;
-    const entry = entries.find(en => en.date === date);
-    if (entry) editEntry(date, true);
+    const entry = entries.find(en => en.date === date); if (entry) editEntry(date, true);
   }
-
   function editEntry(date, keepDate = false) {
-    const entry = entries.find(en => en.date === date);
-    if (!entry) return;
-
+    const entry = entries.find(en => en.date === date); if (!entry) return;
     if (!keepDate) document.getElementById('entry-date').value = entry.date;
-
-    // Q1 radios
-    document.querySelectorAll('input[name="q1"]').forEach(r => {
-      r.checked = parseInt(r.value) === entry.q1;
-    });
-
-    // Q2 nap
+    document.querySelectorAll('input[name="q1"]').forEach(r => { r.checked = parseInt(r.value) === entry.q1; });
     if (entry.nap !== null && entry.nap !== undefined) {
       document.getElementById(entry.nap ? 'nap-yes' : 'nap-no').checked = true;
       document.getElementById('nap-times-wrap').classList.toggle('hidden', !entry.nap);
@@ -1021,37 +955,20 @@ create policy "Members manage entries" on sleep_entries
       document.querySelectorAll('input[name="nap"]').forEach(r => r.checked = false);
       document.getElementById('nap-times-wrap').classList.add('hidden');
     }
-    document.getElementById('nap-times').value = entry.nap_times || '';
-
-    // Q3
-    document.getElementById('medication').value = entry.medication || '';
-
-    // Q4
+    updateYnStyles();
+    document.getElementById('nap-times').value          = entry.nap_times || '';
+    document.getElementById('medication').value         = entry.medication || '';
     document.getElementById('time-in-bed').value        = entry.time_in_bed || '';
     document.getElementById('time-sleep-attempt').value = entry.time_sleep_attempt || '';
-
-    // Q5–Q7
-    document.getElementById('sleep-onset').value      = entry.sleep_onset != null ? entry.sleep_onset : '';
-    document.getElementById('awakenings-count').value = entry.awakenings_count != null ? entry.awakenings_count : '';
-    document.getElementById('wake-time').value        = entry.wake_time != null ? entry.wake_time : '';
-
-    // Q8–Q9
-    document.getElementById('final-awakening').value = entry.final_awakening || '';
-    document.getElementById('got-up').value          = entry.got_up || '';
-
-    // Q10 radios
-    document.querySelectorAll('input[name="q10"]').forEach(r => {
-      r.checked = parseInt(r.value) === entry.q10;
-    });
-
-    // Re-render styled radio groups to reflect checked state
-    renderRadioGroup('q1-radios',  'q1',  t().q1Scale);
+    document.getElementById('sleep-onset').value        = entry.sleep_onset != null ? entry.sleep_onset : '';
+    document.getElementById('awakenings-count').value   = entry.awakenings_count != null ? entry.awakenings_count : '';
+    document.getElementById('wake-time').value          = entry.wake_time != null ? entry.wake_time : '';
+    document.getElementById('final-awakening').value    = entry.final_awakening || '';
+    document.getElementById('got-up').value             = entry.got_up || '';
+    document.querySelectorAll('input[name="q10"]').forEach(r => { r.checked = parseInt(r.value) === entry.q10; });
+    renderRadioGroup('q1-radios', 'q1', t().q1Scale);
     renderRadioGroup('q10-radios', 'q10', t().q10Scale);
-
-    if (!keepDate) {
-      switchTab('new');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
+    if (!keepDate) { switchTab('new'); window.scrollTo({ top: 0, behavior: 'smooth' }); }
   }
 
   // ============================================================
@@ -1061,54 +978,37 @@ create policy "Members manage entries" on sleep_entries
     currentTab = tab;
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
     document.getElementById(`tab-${tab}`).classList.remove('hidden');
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-      const active = btn.dataset.tab === tab;
-      btn.classList.toggle('border-indigo-600', active);
-      btn.classList.toggle('text-indigo-600', active);
-      btn.classList.toggle('border-transparent', !active);
-      btn.classList.toggle('text-slate-400', !active);
-    });
+    document.querySelectorAll('.tab-btn').forEach(btn =>
+      btn.classList.toggle('active', btn.dataset.tab === tab));
     if (tab === 'history') renderHistory();
     if (tab === 'settings') {
       document.getElementById('user-email').textContent = user?.email || '';
-      // Child name
-      const nameEl = document.getElementById('settings-child-name');
-      if (nameEl) nameEl.textContent = currentChild?.name || '';
-      // Share code
-      const codeEl = document.getElementById('share-code-display');
-      if (codeEl) codeEl.textContent = currentChild?.share_code || '';
-      // Children list (only if >1)
-      renderSettingsChildrenList();
-      // Members list
-      loadMembers().then(renderMembersList);
+      const n = document.getElementById('settings-child-name'); if (n) n.textContent = currentChild?.name || '';
+      const c = document.getElementById('share-code-display'); if (c) c.textContent = currentChild?.share_code || '';
+      renderSettingsChildrenList(); loadMembers().then(renderMembersList);
     }
   }
-
   function renderSettingsChildrenList() {
     const section = document.getElementById('settings-children-section');
     const list    = document.getElementById('settings-children-list');
     if (!section || !list) return;
-    if (children.length <= 1) {
-      section.classList.add('hidden');
-      return;
-    }
-    section.classList.remove('hidden');
-    list.innerHTML = '';
+    if (children.length <= 1) { section.classList.add('hidden'); return; }
+    section.classList.remove('hidden'); list.innerHTML = '';
     const selfId = localStorage.getItem('sovn-self-id');
     children.forEach(child => {
       const row = document.createElement('div');
-      row.className = 'flex items-center justify-between py-1';
+      row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;';
       const nameSpan = document.createElement('span');
-      nameSpan.className = 'text-sm text-slate-700' + (child.id === currentChild?.id ? ' font-semibold text-indigo-600' : '');
-      const isSelfEntry = child.id === selfId;
-      const emoji = isSelfEntry ? '👤 ' : '';
-      const label = isSelfEntry ? (lang === 'no' ? 'Meg selv' : 'Myself') : child.name;
-      nameSpan.textContent = emoji + label;
+      const isActive = child.id === currentChild?.id;
+      const isSelf   = child.id === selfId;
+      nameSpan.textContent = (isSelf ? '👤 ' : '') + (isSelf ? (lang === 'no' ? 'Meg selv' : 'Myself') : child.name);
+      nameSpan.style.cssText = `font-size:0.875rem;${isActive ? 'font-weight:600;color:var(--accent);' : 'color:var(--text-2);'}`;
       row.appendChild(nameSpan);
-      if (child.id !== currentChild?.id) {
+      if (!isActive) {
         const btn = document.createElement('button');
         btn.textContent = t().switchChild;
-        btn.className = 'text-xs font-medium px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50 transition';
+        btn.className = 'btn-ghost';
+        btn.style.cssText = 'font-size:0.625rem;padding:5px 10px;';
         btn.onclick = () => selectChild(child);
         row.appendChild(btn);
       }
@@ -1121,209 +1021,218 @@ create policy "Members manage entries" on sleep_entries
   // ============================================================
   function toggleLang() {
     lang = lang === 'no' ? 'en' : 'no';
-    localStorage.setItem('sovn-lang', lang);
-    renderLang();
+    localStorage.setItem('sovn-lang', lang); renderLang();
     if (currentTab === 'history') renderHistory();
   }
-
   function renderLang() {
-    const tx   = t();
-    const name = getChildName();
-
-    // Auth screen
-    setText('auth-title', tx.authTitle);
-    setText('auth-google-btn-text', tx.signInGoogle);
-    setText('auth-lang-btn', tx.langSwitch);
-
-    // Children screen
-    setText('children-title', tx.authTitle);
-    setText('children-lang-btn', tx.langSwitch);
-    setText('children-signout-btn', tx.signOutSmall);
-    setText('children-back-link', tx.backLink);
-    setText('create-child-heading', tx.createChild);
-    setAttr('new-child-name', 'placeholder', tx.childNamePlaceholder);
-    setText('btn-create-child', tx.createBtn);
-    setText('join-child-heading', tx.joinChild);
-    setAttr('join-code', 'placeholder', tx.codePlaceholder);
-    setText('btn-join-child', tx.joinBtn);
-
-    // Header / tabs
-    setText('app-title', tx.appTitle);
-    setText('app-lang-btn', tx.langSwitch);
-    setText('tab-new-btn', tx.tabNew);
-    setText('tab-history-btn', tx.tabHistory);
-    setText('tab-settings-btn', tx.tabSettings);
-
-    // Child badge
+    const tx = t(); const name = getChildName(); const self = isSelf();
+    setText('auth-title', tx.authTitle); setText('auth-google-btn-text', tx.signInGoogle); setText('auth-lang-btn', tx.langSwitch);
+    setText('children-title', tx.authTitle); setText('children-lang-btn', tx.langSwitch);
+    setText('children-signout-btn', tx.signOutSmall); setText('children-back-link', tx.backLink);
+    setText('create-child-heading', tx.createChild); setAttr('new-child-name', 'placeholder', tx.childNamePlaceholder);
+    setText('btn-create-child', tx.createBtn); setText('join-child-heading', tx.joinChild);
+    setAttr('join-code', 'placeholder', tx.codePlaceholder); setText('btn-join-child', tx.joinBtn);
+    setText('app-title', tx.appTitle); setText('app-lang-btn', tx.langSwitch);
+    setText('tab-new-btn', tx.tabNew); setText('tab-history-btn', tx.tabHistory); setText('tab-settings-btn', tx.tabSettings);
     const badge = document.getElementById('child-badge');
     if (badge) {
-      const selfActive = isSelf();
-      const badgeEmoji = selfActive ? '👤' : '';
-      const badgeLabel = selfActive ? tx.myselfLabel : (currentChild?.name || '');
-      badge.textContent = badgeEmoji ? `${badgeEmoji} ${badgeLabel}` : badgeLabel;
+      badge.textContent = (isSelf() ? '👤 ' : '') + (isSelf() ? tx.myselfLabel : (currentChild?.name || ''));
       badge.style.cursor = children.length > 1 ? 'pointer' : 'default';
     }
-
-    // Children setup screen
-    setText('create-self-heading', tx.createSelf);
-    setText('create-self-desc', tx.createSelfDesc);
-    setText('btn-create-self', tx.createSelfBtn);
+    setText('create-self-heading', tx.createSelf); setText('create-self-desc', tx.createSelfDesc); setText('btn-create-self', tx.createSelfBtn);
     setText('label-or-child', tx.orChild);
-
-    // New entry form
-    const self = isSelf();
-    setText('label-date', tx.labelDate);
-    setText('section-before', tx.sectionBefore);
-    setText('section-morning', tx.sectionMorning);
-
-    setText('label-q1', tx.q1(name, self));
-    renderRadioGroup('q1-radios', 'q1', tx.q1Scale);
-
-    setText('label-q2', tx.q2(name, self));
-    setText('label-yes', tx.yes);
-    setText('label-no', tx.no_);
+    setText('label-date', tx.labelDate); setText('section-before', tx.sectionBefore); setText('section-morning', tx.sectionMorning);
+    setText('label-q1', tx.q1(name, self)); renderRadioGroup('q1-radios', 'q1', tx.q1Scale);
+    setText('label-q2', tx.q2(name, self)); setText('label-yes', tx.yes); setText('label-no', tx.no_);
     setAttr('nap-times', 'placeholder', tx.q2NapTimes);
-
-    setText('label-q3', tx.q3(name, self));
-    setText('label-q4', tx.q4(name, self));
-    setText('label-in-bed', tx.labelInBed);
-    setText('label-sleep-attempt', tx.labelSleepAttempt);
-
-    setText('label-q5', tx.q5(name, self));
-    setText('label-minutes-1', tx.minutes);
-    setText('label-q6', tx.q6(name, self));
-    setText('label-q7', tx.q7(name, self));
-    setText('label-minutes-2', tx.minutes);
-    setText('label-q8', tx.q8(name, self));
-    setText('label-q9', tx.q9(name, self));
-
-    setText('label-q10', tx.q10(name, self));
-    renderRadioGroup('q10-radios', 'q10', tx.q10Scale);
-
+    setText('label-q3', tx.q3(name, self)); setText('label-q4', tx.q4(name, self));
+    setText('label-in-bed', tx.labelInBed); setText('label-sleep-attempt', tx.labelSleepAttempt);
+    setText('label-q5', tx.q5(name, self)); setText('label-minutes-1', tx.minutes);
+    setText('label-q6', tx.q6(name, self)); setText('label-q7', tx.q7(name, self));
+    setText('label-minutes-2', tx.minutes); setText('label-q8', tx.q8(name, self)); setText('label-q9', tx.q9(name, self));
+    setText('label-q10', tx.q10(name, self)); renderRadioGroup('q10-radios', 'q10', tx.q10Scale);
     setText('btn-save-entry', tx.saveEntry);
-
-    // Settings
     setText('label-this-child', self ? tx.thisChildSelf : tx.thisChild);
     setText('label-share-code', tx.shareCodeLabel);
     setText('share-code-hint', self ? tx.shareCodeHintSelf : tx.shareCodeHint);
-    setText('btn-copy-code', tx.copyCode);
-    setText('label-children-section', tx.childrenSection);
-    setText('btn-add-child', tx.addChildBtn);
-    setText('label-account', tx.accountLabel);
-    setText('btn-sign-out', tx.signOut);
+    setText('btn-copy-code', tx.copyCode); setText('label-children-section', tx.childrenSection);
+    setText('btn-add-child', tx.addChildBtn); setText('label-account', tx.accountLabel); setText('btn-sign-out', tx.signOut);
   }
-
   function renderRadioGroup(containerId, name, options) {
-    const container = document.getElementById(containerId);
-    if (!container) return;
+    const container = document.getElementById(containerId); if (!container) return;
     const checked    = document.querySelector(`input[name="${name}"]:checked`);
     const checkedVal = checked ? parseInt(checked.value) : null;
     container.innerHTML = '';
     options.forEach((label, i) => {
-      const val  = i + 1;
-      const id   = `${name}-${val}`;
+      const val = i + 1; const id = `${name}-${val}`;
       const wrap = document.createElement('label');
-      wrap.htmlFor   = id;
-      const isChecked = checkedVal === val;
-      wrap.className = `flex items-center gap-1.5 text-sm cursor-pointer border rounded-lg px-3 py-2 transition ${isChecked ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-indigo-50 hover:border-indigo-300'}`;
-
+      wrap.htmlFor = id; wrap.className = 'radio-opt' + (checkedVal === val ? ' checked' : '');
       const radio = document.createElement('input');
-      radio.type      = 'radio';
-      radio.name      = name;
-      radio.id        = id;
-      radio.value     = val;
-      radio.className = 'sr-only';
+      radio.type = 'radio'; radio.name = name; radio.id = id; radio.value = val;
+      radio.style.cssText = 'position:absolute;opacity:0;pointer-events:none;';
       if (checkedVal === val) radio.checked = true;
       radio.onchange = () => renderRadioGroup(containerId, name, options);
-
-      const span = document.createElement('span');
-      span.textContent = label;
-
-      wrap.appendChild(radio);
-      wrap.appendChild(span);
-      container.appendChild(wrap);
+      const span = document.createElement('span'); span.textContent = label;
+      wrap.appendChild(radio); wrap.appendChild(span); container.appendChild(wrap);
     });
   }
 
   // ============================================================
-  // HISTORY RENDERING
+  // YES/NO STYLE UPDATE
+  // ============================================================
+  function updateYnStyles() {
+    const yL = document.getElementById('yn-label-yes');
+    const nL = document.getElementById('yn-label-no');
+    if (yL) yL.classList.toggle('yn-checked', !!document.getElementById('nap-yes')?.checked);
+    if (nL) nL.classList.toggle('yn-checked', !!document.getElementById('nap-no')?.checked);
+  }
+
+  // ============================================================
+  // HISTORY
   // ============================================================
   function renderHistory() {
     const list  = document.getElementById('history-list');
     const empty = document.getElementById('history-empty');
     list.innerHTML = '';
-
-    if (!entries.length) {
-      empty.textContent = t().historyEmpty;
-      empty.classList.remove('hidden');
-      return;
-    }
+    if (!entries.length) { empty.textContent = t().historyEmpty; empty.classList.remove('hidden'); return; }
     empty.classList.add('hidden');
-
     const tx = t();
-    entries.forEach(entry => {
+
+    entries.forEach((entry, i) => {
+      const isOpen = expandedEntries.has(entry.date);
       const card = document.createElement('div');
-      const q10Colors = ['#ef4444','#f97316','#eab308','#22c55e','#6366f1'];
-      const borderColor = entry.q10 ? q10Colors[entry.q10 - 1] : '#e2e8f0';
-      card.className = 'bg-white rounded-2xl shadow-sm border border-slate-100 p-5 overflow-hidden relative';
-      card.style.borderLeft = `4px solid ${borderColor}`;
+      card.className = 'card';
+      card.style.cssText = `overflow:hidden;animation:cardIn 0.2s ${i * 0.03}s ease both;`;
 
-      const dateHeading = document.createElement('p');
-      dateHeading.className = 'font-semibold text-slate-800 mb-3 capitalize';
-      dateHeading.textContent = formatDate(entry.date, lang);
-      card.appendChild(dateHeading);
+      // ── Collapsed header (always visible) ──
+      const header = document.createElement('div');
+      header.className = 'entry-header';
+      header.onclick = () => toggleEntryCard(entry.date, body, chevron);
 
+      const headerLeft = document.createElement('div');
+      headerLeft.style.cssText = 'display:flex;flex-direction:column;gap:3px;min-width:0;';
+
+      const dateEl = document.createElement('p');
+      dateEl.style.cssText = 'font-weight:600;color:var(--text-1);font-size:1rem;text-transform:capitalize;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+      dateEl.textContent = formatDate(entry.date, lang);
+      headerLeft.appendChild(dateEl);
+
+      // Compact key metrics shown in collapsed state
+      const metrics = buildCompactMetrics(entry, tx);
+      if (metrics) {
+        const metricEl = document.createElement('p');
+        metricEl.style.cssText = 'font-family:"Syne",sans-serif;font-size:0.65rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-3);';
+        metricEl.textContent = metrics;
+        headerLeft.appendChild(metricEl);
+      }
+      header.appendChild(headerLeft);
+
+      const headerRight = document.createElement('div');
+      headerRight.style.cssText = 'display:flex;align-items:center;gap:8px;flex-shrink:0;';
+      if (entry.q10) {
+        const emoji = document.createElement('span');
+        emoji.style.cssText = 'font-size:1.25rem;line-height:1;';
+        emoji.textContent = sleepQualityEmoji(entry.q10);
+        headerRight.appendChild(emoji);
+      }
+
+      const chevron = document.createElement('svg');
+      chevron.className = 'entry-chevron' + (isOpen ? ' open' : '');
+      chevron.setAttribute('width', '14');
+      chevron.setAttribute('height', '14');
+      chevron.setAttribute('viewBox', '0 0 14 14');
+      chevron.setAttribute('fill', 'none');
+      chevron.innerHTML = '<path d="M2.5 5L7 9.5L11.5 5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>';
+      headerRight.appendChild(chevron);
+      header.appendChild(headerRight);
+      card.appendChild(header);
+
+      // ── Expandable body ──
+      const body = document.createElement('div');
+      body.className = 'entry-body' + (isOpen ? ' open' : '');
+
+      const bodyInner = document.createElement('div');
+      bodyInner.style.cssText = 'padding:0 16px 14px;';
+
+      // Divider
+      const divider = document.createElement('div');
+      divider.style.cssText = 'height:1px;background:var(--border);margin-bottom:12px;';
+      bodyInner.appendChild(divider);
+
+      // Detail grid
       const grid = document.createElement('div');
-      grid.className = 'grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm mb-4';
-
+      grid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:4px 14px;margin-bottom:14px;';
       buildSummaryFields(entry, tx).forEach(([label, value]) => {
         if (value === null || value === undefined || value === '') return;
         const lEl = document.createElement('span');
-        lEl.className   = 'text-slate-400 truncate';
+        lEl.style.cssText = 'font-family:"Syne",sans-serif;font-size:0.65rem;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
         lEl.textContent = label;
         const vEl = document.createElement('span');
-        vEl.className   = 'text-slate-700 font-medium';
+        vEl.style.cssText = 'font-size:0.875rem;color:var(--text-1);font-weight:500;';
         vEl.textContent = value;
-        grid.appendChild(lEl);
-        grid.appendChild(vEl);
+        grid.appendChild(lEl); grid.appendChild(vEl);
       });
-      card.appendChild(grid);
+      bodyInner.appendChild(grid);
 
+      // Buttons
       const btnRow = document.createElement('div');
-      btnRow.className = 'flex gap-2';
-
+      btnRow.style.cssText = 'display:flex;gap:6px;';
       const editBtn = document.createElement('button');
       editBtn.textContent = tx.editBtn;
-      editBtn.className   = 'flex-1 text-sm font-medium py-2 rounded-xl border border-indigo-200 text-indigo-600 hover:bg-indigo-50 transition';
-      editBtn.onclick     = () => editEntry(entry.date);
-
+      editBtn.style.cssText = 'flex:1;font-family:"Syne",sans-serif;font-weight:700;font-size:0.7rem;letter-spacing:0.07em;text-transform:uppercase;padding:9px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);cursor:pointer;transition:all 0.15s;';
+      editBtn.onmouseover = () => { editBtn.style.borderColor='var(--accent)'; editBtn.style.color='var(--accent)'; };
+      editBtn.onmouseout  = () => { editBtn.style.borderColor='var(--border)';  editBtn.style.color='var(--text-2)'; };
+      editBtn.onclick = () => editEntry(entry.date);
       const delBtn = document.createElement('button');
       delBtn.textContent = tx.deleteBtn;
-      delBtn.className   = 'flex-1 text-sm font-medium py-2 rounded-xl border border-red-100 text-red-500 hover:bg-red-50 transition';
-      delBtn.onclick     = () => deleteEntry(entry.date);
+      delBtn.style.cssText = 'flex:1;font-family:"Syne",sans-serif;font-weight:700;font-size:0.7rem;letter-spacing:0.07em;text-transform:uppercase;padding:9px;border-radius:6px;border:1px solid #e8c8c0;background:transparent;color:#b8401e;cursor:pointer;transition:background 0.15s;';
+      delBtn.onmouseover = () => { delBtn.style.background='rgba(184,64,30,0.06)'; };
+      delBtn.onmouseout  = () => { delBtn.style.background='transparent'; };
+      delBtn.onclick = () => deleteEntry(entry.date);
+      btnRow.appendChild(editBtn); btnRow.appendChild(delBtn);
+      bodyInner.appendChild(btnRow);
 
-      btnRow.appendChild(editBtn);
-      btnRow.appendChild(delBtn);
-      card.appendChild(btnRow);
-
+      body.appendChild(bodyInner);
+      card.appendChild(body);
       list.appendChild(card);
     });
   }
 
+  function toggleEntryCard(date, body, chevron) {
+    const isOpen = expandedEntries.has(date);
+    if (isOpen) {
+      expandedEntries.delete(date);
+      body.classList.remove('open');
+      chevron.classList.remove('open');
+    } else {
+      expandedEntries.add(date);
+      body.classList.add('open');
+      chevron.classList.add('open');
+    }
+  }
+
+  function buildCompactMetrics(entry, tx) {
+    const parts = [];
+    if (entry.time_in_bed)    parts.push(entry.time_in_bed);
+    if (entry.got_up)         parts.push('→ ' + entry.got_up);
+    if (entry.sleep_onset != null) parts.push(entry.sleep_onset + tx.minutesSuffix);
+    if (entry.awakenings_count != null) parts.push(entry.awakenings_count + '×');
+    return parts.join('  ·  ') || null;
+  }
   function buildSummaryFields(entry, tx) {
     return [
-      [tx.fieldQ1,           entry.q1  != null ? tx.q1Scale[entry.q1 - 1]   : null],
-      [tx.fieldNap,          entry.nap === true ? tx.yes : entry.nap === false ? tx.no_ : null],
-      [tx.fieldNapTimes,     entry.nap_times],
-      [tx.fieldMed,          entry.medication],
-      [tx.fieldInBed,        entry.time_in_bed],
-      [tx.fieldSleepAttempt, entry.time_sleep_attempt],
-      [tx.fieldOnset,        entry.sleep_onset != null ? entry.sleep_onset + tx.minutesSuffix : null],
-      [tx.fieldAwakenings,   entry.awakenings_count != null ? String(entry.awakenings_count) : null],
-      [tx.fieldWakeTime,     entry.wake_time != null ? entry.wake_time + tx.minutesSuffix : null],
-      [tx.fieldFinalWake,    entry.final_awakening],
-      [tx.fieldGotUp,        entry.got_up],
-      [tx.fieldQ10,          entry.q10 != null ? sleepQualityEmoji(entry.q10) + ' ' + tx.q10Scale[entry.q10 - 1] : null],
+      [tx.fieldQ1,          entry.q1!=null?tx.q1Scale[entry.q1-1]:null],
+      [tx.fieldNap,         entry.nap===true?tx.yes:entry.nap===false?tx.no_:null],
+      [tx.fieldNapTimes,    entry.nap_times],
+      [tx.fieldMed,         entry.medication],
+      [tx.fieldInBed,       entry.time_in_bed],
+      [tx.fieldSleepAttempt,entry.time_sleep_attempt],
+      [tx.fieldOnset,       entry.sleep_onset!=null?entry.sleep_onset+tx.minutesSuffix:null],
+      [tx.fieldAwakenings,  entry.awakenings_count!=null?String(entry.awakenings_count):null],
+      [tx.fieldWakeTime,    entry.wake_time!=null?entry.wake_time+tx.minutesSuffix:null],
+      [tx.fieldFinalWake,   entry.final_awakening],
+      [tx.fieldGotUp,       entry.got_up],
+      [tx.fieldQ10,         entry.q10!=null?sleepQualityEmoji(entry.q10)+' '+tx.q10Scale[entry.q10-1]:null],
     ];
   }
 
@@ -1331,92 +1240,44 @@ create policy "Members manage entries" on sleep_entries
   // USER AVATAR
   // ============================================================
   function renderUserAvatar() {
-    // App screen avatars
-    const avatarImg      = document.getElementById('user-avatar');
-    const avatarFallback = document.getElementById('user-avatar-fallback');
-    // Children screen avatars
-    const childrenAvatarImg      = document.getElementById('children-avatar-img');
-    const childrenAvatarFallback = document.getElementById('children-avatar-fallback');
-
-    const avatarUrl = user?.user_metadata?.avatar_url;
-    const name      = user?.user_metadata?.full_name || user?.email || '';
-    const initial   = name.charAt(0).toUpperCase();
-
-    if (avatarImg && avatarFallback) {
-      if (avatarUrl) {
-        avatarImg.src = avatarUrl;
-        avatarImg.classList.remove('hidden');
-        avatarFallback.classList.add('hidden');
-      } else {
-        avatarFallback.textContent = initial;
-        avatarFallback.classList.remove('hidden');
-        avatarImg.classList.add('hidden');
-      }
-    }
-
-    if (childrenAvatarImg && childrenAvatarFallback) {
-      if (avatarUrl) {
-        childrenAvatarImg.src = avatarUrl;
-        childrenAvatarImg.classList.remove('hidden');
-        childrenAvatarFallback.classList.add('hidden');
-      } else {
-        childrenAvatarFallback.textContent = initial;
-        childrenAvatarFallback.classList.remove('hidden');
-        childrenAvatarImg.classList.add('hidden');
-      }
-    }
+    const aI = document.getElementById('user-avatar'),       aF = document.getElementById('user-avatar-fallback');
+    const cI = document.getElementById('children-avatar-img'), cF = document.getElementById('children-avatar-fallback');
+    const url = user?.user_metadata?.avatar_url;
+    const ini = (user?.user_metadata?.full_name || user?.email || '').charAt(0).toUpperCase();
+    [[aI,aF],[cI,cF]].forEach(([img,fb]) => {
+      if (!img||!fb) return;
+      if (url) { img.src=url; img.classList.remove('hidden'); fb.classList.add('hidden'); }
+      else { fb.textContent=ini; fb.classList.remove('hidden'); img.classList.add('hidden'); }
+    });
   }
 
   // ============================================================
   // NAP TOGGLE
   // ============================================================
   function toggleNapTimes() {
-    const yes = document.getElementById('nap-yes').checked;
-    document.getElementById('nap-times-wrap').classList.toggle('hidden', !yes);
+    document.getElementById('nap-times-wrap').classList.toggle('hidden', !document.getElementById('nap-yes').checked);
   }
 
   // ============================================================
   // HELPERS
   // ============================================================
   function setTodayDate() {
-    const today = new Date();
-    const yyyy  = today.getFullYear();
-    const mm    = String(today.getMonth() + 1).padStart(2, '0');
-    const dd    = String(today.getDate()).padStart(2, '0');
-    document.getElementById('entry-date').value = `${yyyy}-${mm}-${dd}`;
+    const t = new Date();
+    document.getElementById('entry-date').value = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
   }
-
-  function setText(id, text) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = text;
-  }
-
-  function setAttr(id, attr, val) {
-    const el = document.getElementById(id);
-    if (el) el.setAttribute(attr, val);
-  }
-
-  function intOrNull(id) {
-    const val = document.getElementById(id).value;
-    return val === '' ? null : parseInt(val, 10);
-  }
-
+  function setText(id, text) { const el = document.getElementById(id); if (el) el.textContent = text; }
+  function setAttr(id, attr, val) { const el = document.getElementById(id); if (el) el.setAttribute(attr, val); }
+  function intOrNull(id) { const v = document.getElementById(id).value; return v === '' ? null : parseInt(v, 10); }
   function showFeedback(id, msg, isError = false) {
-    const el = document.getElementById(id);
-    if (!el) return;
+    const el = document.getElementById(id); if (!el) return;
     el.textContent = msg;
-    el.className = `text-sm mt-2 ${isError ? 'text-red-600' : 'text-green-600'}`;
+    el.style.color = isError ? 'var(--accent)' : 'var(--green)';
     el.classList.remove('hidden');
     if (!isError) setTimeout(() => el.classList.add('hidden'), 3000);
   }
-
   function formatDate(dateStr, language) {
-    const [y, m, d] = dateStr.split('-').map(Number);
-    const date      = new Date(y, m - 1, d);
-    const locale    = language === 'no' ? 'nb-NO' : 'en-GB';
-    return date.toLocaleDateString(locale, {
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-    });
+    const [y,m,d] = dateStr.split('-').map(Number);
+    return new Date(y,m-1,d).toLocaleDateString(language==='no'?'nb-NO':'en-GB', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
   }
 </script>
 </body>
