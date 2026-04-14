@@ -378,6 +378,30 @@ create policy "Users join child" on child_members
 create policy "Users delete own memberships" on child_members
   for delete using (user_id = auth.uid());
 
+-- Update get_child_members to also return user_id:
+-- create or replace function get_child_members(p_child_id uuid)
+-- returns table(user_id uuid, name text, email text, avatar text)
+-- language plpgsql security definer as $$
+-- begin
+--   if not exists (select 1 from child_members where child_id = p_child_id and user_id = auth.uid()) then return; end if;
+--   return query
+--     select au.id,
+--       coalesce(au.raw_user_meta_data->>'full_name', au.raw_user_meta_data->>'name'),
+--       au.email,
+--       coalesce(au.raw_user_meta_data->>'avatar_url', au.raw_user_meta_data->>'picture')
+--     from child_members cm join auth.users au on au.id = cm.user_id
+--     where cm.child_id = p_child_id;
+-- end; $$;
+
+-- Remove another member (any existing member can remove another):
+-- create or replace function remove_member(p_child_id uuid, p_target_user_id uuid)
+-- returns void language plpgsql security definer as $$
+-- begin
+--   if not exists (select 1 from child_members where child_id = p_child_id and user_id = auth.uid())
+--     then raise exception 'Not authorized'; end if;
+--   delete from child_members where child_id = p_child_id and user_id = p_target_user_id;
+-- end; $$;
+
 create policy "Members manage entries" on sleep_entries
   for all using (exists (select 1 from child_members where child_id = sleep_entries.child_id and user_id = auth.uid()))
   with check (exists (select 1 from child_members where child_id = sleep_entries.child_id and user_id = auth.uid()));
@@ -753,6 +777,7 @@ create policy "Members manage entries" on sleep_entries
       addChildBtn:'+ Legg til person',thisChild:'Dette barnet',thisChildSelf:'Deg selv',
       backLink:'← Tilbake',switchChild:'Bytt',signOutSmall:'Logg ut',childrenSection:'Personer',
       removeAccess:'Fjern',removeConfirm:(name)=>`Fjerne "${name}" fra listen din? Du mister tilgang til dagboken, men registreringene beholdes.`,removeError:'Kunne ikke fjerne. Prøv igjen.',
+      removeMemberConfirm:(name)=>`Fjerne ${name} sin tilgang? De vil ikke lenger kunne se eller registrere søvn for dette barnet.`,removeMemberError:'Kunne ikke fjerne tilgangen. Prøv igjen.',membersLabel:'Foresatte med tilgang',
       createSelf:'Registrer min søvn',createSelfDesc:'Logg din egen søvn – for deg selv',
       createSelfBtn:'Legg til meg selv',orChild:'eller legg til barn',myselfLabel:'Meg selv',
     },
@@ -792,6 +817,7 @@ create policy "Members manage entries" on sleep_entries
       addChildBtn:'+ Add person',thisChild:'This child',thisChildSelf:'Yourself',
       backLink:'← Back',switchChild:'Switch',signOutSmall:'Sign out',childrenSection:'People',
       removeAccess:'Remove',removeConfirm:(name)=>`Remove "${name}" from your list? You'll lose access to the diary, but entries are kept.`,removeError:'Could not remove. Please try again.',
+      removeMemberConfirm:(name)=>`Remove ${name}'s access? They will no longer be able to view or log sleep for this child.`,removeMemberError:'Could not remove access. Please try again.',membersLabel:'People with access',
       createSelf:'Track my own sleep',createSelfDesc:'Log your own sleep — for yourself',
       createSelfBtn:'Add myself',orChild:'or add a child',myselfLabel:'Myself',
     }
@@ -971,15 +997,52 @@ create policy "Members manage entries" on sleep_entries
   function renderMembersList(members) {
     const container = document.getElementById('members-list'); if (!container) return;
     container.innerHTML = '';
+    if (!members.length) return;
+
+    const heading = document.createElement('p');
+    heading.style.cssText = 'font-family:"Syne",sans-serif;font-weight:700;font-size:0.625rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-3);margin-bottom:8px;';
+    heading.textContent = t().membersLabel;
+    container.appendChild(heading);
+
     members.forEach(m => {
+      const isMe = m.user_id === user?.id;
+      const displayName = m.name || m.email || '?';
       const row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;gap:8px;';
-      const img = m.avatar
-        ? `<img src="${m.avatar}" style="width:22px;height:22px;border-radius:50%;object-fit:cover;" />`
-        : `<div style="width:22px;height:22px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-family:'Syne',sans-serif;font-weight:800;font-size:0.625rem;display:flex;align-items:center;justify-content:center;">${(m.name||m.email||'?').charAt(0).toUpperCase()}</div>`;
-      row.innerHTML = `${img}<span style="font-size:0.8125rem;color:var(--text-2);">${m.name||m.email}</span>`;
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:3px 0;';
+
+      const avatar = m.avatar
+        ? `<img src="${m.avatar}" style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;" />`
+        : `<div style="width:26px;height:26px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-family:'Syne',sans-serif;font-weight:800;font-size:0.6875rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${displayName.charAt(0).toUpperCase()}</div>`;
+
+      const nameEl = document.createElement('span');
+      nameEl.style.cssText = 'font-size:0.8125rem;color:var(--text-2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      nameEl.textContent = isMe ? `${displayName} (${lang === 'no' ? 'deg' : 'you'})` : displayName;
+
+      row.innerHTML = avatar;
+      row.appendChild(nameEl);
+
+      if (!isMe && m.user_id) {
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = t().removeAccess;
+        removeBtn.style.cssText = 'font-family:"Syne",sans-serif;font-weight:700;font-size:0.5625rem;letter-spacing:0.05em;text-transform:uppercase;padding:4px 8px;border-radius:5px;cursor:pointer;border:1px solid rgba(184,64,30,0.25);background:transparent;color:var(--accent);white-space:nowrap;transition:all 0.15s;flex-shrink:0;';
+        removeBtn.onmouseover = () => { removeBtn.style.background = 'var(--accent-soft)'; };
+        removeBtn.onmouseout  = () => { removeBtn.style.background = 'transparent'; };
+        removeBtn.onclick = () => removeMember(m.user_id, displayName);
+        row.appendChild(removeBtn);
+      }
+
       container.appendChild(row);
     });
+  }
+
+  async function removeMember(targetUserId, displayName) {
+    if (!confirm(t().removeMemberConfirm(displayName))) return;
+    const { error } = await sb.rpc('remove_member', {
+      p_child_id: currentChild.id,
+      p_target_user_id: targetUserId
+    });
+    if (error) { alert(t().removeMemberError); return; }
+    loadMembers().then(renderMembersList);
   }
 
   // ============================================================
