@@ -316,7 +316,7 @@
       cursor: pointer;
       transition: background 0.15s;
     }
-    .child-badge:hover { background: rgba(184,64,30,0.14); }
+    .child-badge:hover { background: rgba(39,77,58,0.18); }
   </style>
 </head>
 <body>
@@ -705,7 +705,10 @@ create policy "Members manage entries" on sleep_entries
   const expandedEntries = new Set();
 
   function isSelf() { return currentChild && currentChild.id === localStorage.getItem('sovn-self-id'); }
-  function getChildName() { return currentChild?.name || (lang === 'no' ? 'barnet' : 'your child'); }
+  function getChildName() {
+    if (isSelf()) return lang === 'no' ? 'du' : 'you';
+    return currentChild?.name || (lang === 'no' ? 'barnet' : 'the child');
+  }
 
   // ============================================================
   // TRANSLATIONS
@@ -933,11 +936,20 @@ create policy "Members manage entries" on sleep_entries
     children.forEach(child => {
       const isActive    = child.id === currentChild?.id;
       const isSelfEntry = child.id === selfId;
+      const label = (isSelfEntry ? '👤 ' : '') + (isSelfEntry ? (lang === 'no' ? 'Meg selv' : 'Myself') : child.name);
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.textContent = (isSelfEntry ? '👤 ' : '👶 ') + (isSelfEntry ? (lang === 'no' ? 'Meg selv' : 'Myself') : child.name);
-      btn.style.cssText = `font-family:'Syne',sans-serif;font-weight:700;font-size:0.6875rem;letter-spacing:0.05em;text-transform:uppercase;padding:6px 12px;border-radius:6px;cursor:pointer;transition:all 0.15s;border:1px solid ${isActive ? 'var(--accent)' : 'var(--border)'};background:${isActive ? 'var(--accent)' : 'var(--surface)'};color:${isActive ? '#fff' : 'var(--text-2)'};`;
-      btn.onclick = () => selectChild(child);
+      btn.innerHTML = isActive
+        ? `<span style="margin-right:5px;font-size:0.7em;">✓</span>${label}`
+        : label;
+      btn.style.cssText = isActive
+        ? `font-family:'Syne',sans-serif;font-weight:800;font-size:0.6875rem;letter-spacing:0.05em;text-transform:uppercase;padding:7px 14px;border-radius:6px;cursor:default;transition:all 0.15s;border:2px solid var(--green);background:var(--green);color:#fff;box-shadow:0 2px 6px rgba(39,77,58,0.25);`
+        : `font-family:'Syne',sans-serif;font-weight:700;font-size:0.6875rem;letter-spacing:0.05em;text-transform:uppercase;padding:7px 14px;border-radius:6px;cursor:pointer;transition:all 0.15s;border:1px solid var(--border);background:var(--surface);color:var(--text-3);`;
+      if (!isActive) {
+        btn.onmouseover = () => { btn.style.borderColor = 'var(--green)'; btn.style.color = 'var(--green)'; };
+        btn.onmouseout  = () => { btn.style.borderColor = 'var(--border)'; btn.style.color = 'var(--text-3)'; };
+      }
+      btn.onclick = () => { if (!isActive) selectChild(child); };
       wrapper.appendChild(btn);
     });
     container.appendChild(wrapper);
@@ -975,7 +987,7 @@ create policy "Members manage entries" on sleep_entries
   }
   async function handleSaveEntry(e) {
     e.preventDefault();
-    if (!currentChild) { showFeedback('entry-feedback', '⚠️ Ingen barn valgt — last siden på nytt.', true); return; }
+    if (!currentChild) { showFeedback('entry-feedback', '⚠️ Ingen person valgt — last siden på nytt.', true); return; }
     try {
       const date   = document.getElementById('entry-date').value;
       const napVal = document.querySelector('input[name="nap"]:checked');
@@ -1069,8 +1081,11 @@ create policy "Members manage entries" on sleep_entries
       const nameSpan = document.createElement('span');
       const isActive = child.id === currentChild?.id;
       const isSelf   = child.id === selfId;
-      nameSpan.textContent = (isSelf ? '👤 ' : '') + (isSelf ? (lang === 'no' ? 'Meg selv' : 'Myself') : child.name);
-      nameSpan.style.cssText = `font-size:0.875rem;${isActive ? 'font-weight:600;color:var(--accent);' : 'color:var(--text-2);'}`;
+      const label = (isSelf ? '👤 ' : '') + (isSelf ? (lang === 'no' ? 'Meg selv' : 'Myself') : child.name);
+      nameSpan.innerHTML = isActive
+        ? `<span style="display:inline-flex;align-items:center;gap:7px;">${label}<span style="font-size:0.6rem;background:var(--green);color:#fff;font-family:'Syne',sans-serif;font-weight:800;letter-spacing:0.04em;text-transform:uppercase;padding:2px 7px;border-radius:99px;">${lang === 'no' ? 'Valgt' : 'Active'}</span></span>`
+        : label;
+      nameSpan.style.cssText = `font-size:0.875rem;${isActive ? 'font-weight:600;color:var(--text-1);' : 'color:var(--text-2);'}`;
       row.appendChild(nameSpan);
       if (!isActive) {
         const btn = document.createElement('button');
@@ -1111,8 +1126,13 @@ create policy "Members manage entries" on sleep_entries
     setText('tab-new-btn', tx.tabNew); setText('tab-history-btn', tx.tabHistory); setText('tab-settings-btn', tx.tabSettings);
     const badge = document.getElementById('child-badge');
     if (badge) {
-      badge.textContent = (isSelf() ? '👤 ' : '') + (isSelf() ? tx.myselfLabel : (currentChild?.name || ''));
-      badge.style.cursor = children.length > 1 ? 'pointer' : 'default';
+      const label = (isSelf() ? '👤 ' : '') + (isSelf() ? tx.myselfLabel : (currentChild?.name || ''));
+      const canCycle = children.length > 1;
+      badge.innerHTML = canCycle ? `${label}<span style="margin-left:4px;opacity:0.7;">▾</span>` : label;
+      badge.style.cursor = canCycle ? 'pointer' : 'default';
+      badge.style.background = 'rgba(39,77,58,0.1)';
+      badge.style.borderColor = 'rgba(39,77,58,0.25)';
+      badge.style.color = 'var(--green)';
     }
     setText('create-self-heading', tx.createSelf); setText('create-self-desc', tx.createSelfDesc); setText('btn-create-self', tx.createSelfBtn);
     setText('label-or-child', tx.orChild);
