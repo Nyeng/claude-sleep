@@ -164,6 +164,27 @@ create policy "Members manage entries" on sleep_entries
       <p class="text-sm text-slate-400 mt-1">Basert på <a href="https://www.helse-bergen.no/nasjonal-kompetansetjeneste-for-sovnsykdommer-sovno/sovndagbok-sovno" target="_blank" rel="noopener" class="underline hover:text-slate-600">søvndagbok fra Helse Bergen</a></p>
     </div>
 
+    <!-- Card: Myself -->
+    <div class="rounded-2xl border-2 border-indigo-300 p-5 mb-4" style="background: linear-gradient(135deg, #eef2ff 0%, #f5f3ff 100%);" id="card-create-self">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="text-xl">👤</span>
+        <p class="text-sm font-bold text-indigo-800" id="create-self-heading"></p>
+      </div>
+      <p class="text-xs text-indigo-500 mb-3" id="create-self-desc"></p>
+      <button
+        onclick="createSelf()"
+        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition"
+        id="btn-create-self"
+      ></button>
+    </div>
+
+    <!-- Divider -->
+    <div class="flex items-center gap-3 mb-4">
+      <div class="flex-1 h-px bg-slate-200"></div>
+      <p class="text-xs text-slate-400 font-semibold uppercase tracking-wide" id="label-or-child"></p>
+      <div class="flex-1 h-px bg-slate-200"></div>
+    </div>
+
     <!-- Card: Create child -->
     <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4">
       <p class="text-sm font-semibold text-slate-700 mb-3" id="create-child-heading"></p>
@@ -244,6 +265,8 @@ create policy "Members manage entries" on sleep_entries
 
     <!-- ===== TAB: NEW ENTRY ===== -->
     <div id="tab-new" class="tab-panel">
+      <!-- Person switcher (shown when multiple people) -->
+      <div id="person-switcher" class="mb-4"></div>
       <form id="entry-form" onsubmit="handleSaveEntry(event)">
         <!-- Date -->
         <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4">
@@ -253,6 +276,7 @@ create policy "Members manage entries" on sleep_entries
             id="entry-date"
             class="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
             required
+            onchange="onDateChange(this.value)"
           />
         </div>
 
@@ -499,6 +523,10 @@ create policy "Members manage entries" on sleep_entries
   let currentTab   = 'new';
   let entries      = [];
 
+  function isSelf() {
+    return currentChild && currentChild.id === localStorage.getItem('sovn-self-id');
+  }
+
   function getChildName() {
     return currentChild?.name || (lang === 'no' ? 'barnet' : 'your child');
   }
@@ -518,21 +546,21 @@ create policy "Members manage entries" on sleep_entries
       labelDate:          'Dato',
       sectionBefore:      'Fylles ut før leggetid',
       sectionMorning:     'Fylles ut om morgenen',
-      q1:                 (name) => `Hvordan har ${name} fungert på dagtid?`,
+      q1:                 (name, self) => self ? 'Hvordan har du fungert på dagtid?' : `Hvordan har ${name} fungert på dagtid?`,
       q1Scale:            ['1 – Svært bra', '2 – Bra', '3 – Middels', '4 – Dårlig', '5 – Svært dårlig'],
-      q2:                 (name) => `Har ${name} sovet på dagtid?`,
+      q2:                 (name, self) => self ? 'Har du sovet på dagtid?' : `Har ${name} sovet på dagtid?`,
       q2NapTimes:         'Oppgi tidspunkt og varighet',
-      q3:                 (name) => `Medikament gitt til ${name} (valgfritt)`,
-      q4:                 (name) => `Når la du ${name}?`,
+      q3:                 (name, self) => self ? 'Medikament (valgfritt)' : `Medikament gitt til ${name} (valgfritt)`,
+      q4:                 (name, self) => self ? 'Når la du deg?' : `Når la du ${name}?`,
       labelInBed:         'La seg',
       labelSleepAttempt:  'Prøvde å sove',
-      q5:                 (name) => `Hvor lang tid brukte ${name} på å sovne?`,
+      q5:                 (name, self) => self ? 'Hvor lang tid brukte du på å sovne?' : `Hvor lang tid brukte ${name} på å sovne?`,
       minutes:            'minutter',
-      q6:                 (name) => `Hvor mange ganger våknet ${name} i løpet av natten?`,
-      q7:                 (name) => `Hvor lenge var ${name} våken totalt ved nattlige oppvåkninger?`,
-      q8:                 (name) => `Når våknet ${name} endelig om morgenen?`,
-      q9:                 (name) => `Når stod ${name} opp?`,
-      q10:                (name) => `Hvordan vurderer du søvnkvaliteten til ${name}?`,
+      q6:                 (name, self) => self ? 'Hvor mange ganger våknet du i løpet av natten?' : `Hvor mange ganger våknet ${name} i løpet av natten?`,
+      q7:                 (name, self) => self ? 'Hvor lenge var du våken totalt ved nattlige oppvåkninger?' : `Hvor lenge var ${name} våken totalt ved nattlige oppvåkninger?`,
+      q8:                 (name, self) => self ? 'Når våknet du endelig om morgenen?' : `Når våknet ${name} endelig om morgenen?`,
+      q9:                 (name, self) => self ? 'Når stod du opp?' : `Når stod ${name} opp?`,
+      q10:                (name, self) => self ? 'Hvordan vurderer du din søvnkvalitet?' : `Hvordan vurderer du søvnkvaliteten til ${name}?`,
       q10Scale:           ['1 – Svært lett', '2 – Lett', '3 – Middels', '4 – Dyp', '5 – Svært dyp'],
       yes:                'Ja',
       no_:                'Nei',
@@ -558,21 +586,28 @@ create policy "Members manage entries" on sleep_entries
       fieldQ1:            'Dagtidsfungering',
       fieldQ10:           'Søvnkvalitet',
       minutesSuffix:      ' min',
-      createChild:        'Opprett nytt barn',
+      createChild:        'Legg til barn',
       joinChild:          'Bli med via kode',
       childNamePlaceholder: 'Navn på barnet',
       codePlaceholder:    'XXXXXX',
-      createBtn:          'Opprett',
+      createBtn:          'Legg til',
       joinBtn:            'Bli med',
       shareCodeLabel:     'Delingskode',
       shareCodeHint:      'Del denne koden med den andre foresatte',
+      shareCodeHintSelf:  'Del koden med legen eller noen du vil gi tilgang',
       copyCode:           'Kopier',
-      addChildBtn:        'Legg til barn',
+      addChildBtn:        'Legg til person',
       thisChild:          'Dette barnet',
+      thisChildSelf:      'Deg selv',
       backLink:           '← Tilbake',
       switchChild:        'Bytt',
       signOutSmall:       'Logg ut',
-      childrenSection:    'Barn',
+      childrenSection:    'Personer',
+      createSelf:         'Registrer min søvn',
+      createSelfDesc:     'Logg din egen søvn – for deg selv',
+      createSelfBtn:      'Legg til meg selv',
+      orChild:            'eller legg til barn',
+      myselfLabel:        'Meg selv',
     },
     en: {
       appTitle:           'Sleep Diary',
@@ -585,21 +620,21 @@ create policy "Members manage entries" on sleep_entries
       labelDate:          'Date',
       sectionBefore:      'Fill out before bedtime',
       sectionMorning:     'Fill out in the morning',
-      q1:                 (name) => `How did ${name} function during the day?`,
+      q1:                 (name, self) => self ? 'How did you function during the day?' : `How did ${name} function during the day?`,
       q1Scale:            ['1 – Very good', '2 – Good', '3 – Moderate', '4 – Poor', '5 – Very poor'],
-      q2:                 (name) => `Did ${name} nap during the day?`,
+      q2:                 (name, self) => self ? 'Did you nap during the day?' : `Did ${name} nap during the day?`,
       q2NapTimes:         'Enter times and duration',
-      q3:                 (name) => `Medication given to ${name} (optional)`,
-      q4:                 (name) => `When did you put ${name} to bed?`,
+      q3:                 (name, self) => self ? 'Medication (optional)' : `Medication given to ${name} (optional)`,
+      q4:                 (name, self) => self ? 'When did you go to bed?' : `When did you put ${name} to bed?`,
       labelInBed:         'In bed',
       labelSleepAttempt:  'Tried to sleep',
-      q5:                 (name) => `How long did it take ${name} to fall asleep?`,
+      q5:                 (name, self) => self ? 'How long did it take you to fall asleep?' : `How long did it take ${name} to fall asleep?`,
       minutes:            'minutes',
-      q6:                 (name) => `How many times did ${name} wake up during the night?`,
-      q7:                 (name) => `How long was ${name} awake in total during nighttime awakenings?`,
-      q8:                 (name) => `When did ${name} wake up for good in the morning?`,
-      q9:                 (name) => `When did ${name} get up?`,
-      q10:                (name) => `How do you rate ${name}'s sleep quality?`,
+      q6:                 (name, self) => self ? 'How many times did you wake up during the night?' : `How many times did ${name} wake up during the night?`,
+      q7:                 (name, self) => self ? 'How long were you awake in total during nighttime awakenings?' : `How long was ${name} awake in total during nighttime awakenings?`,
+      q8:                 (name, self) => self ? 'When did you wake up for good in the morning?' : `When did ${name} wake up for good in the morning?`,
+      q9:                 (name, self) => self ? 'When did you get up?' : `When did ${name} get up?`,
+      q10:                (name, self) => self ? 'How do you rate your sleep quality?' : `How do you rate ${name}'s sleep quality?`,
       q10Scale:           ['1 – Very light', '2 – Light', '3 – Moderate', '4 – Deep', '5 – Very deep'],
       yes:                'Yes',
       no_:                'No',
@@ -625,21 +660,28 @@ create policy "Members manage entries" on sleep_entries
       fieldQ1:            'Daytime functioning',
       fieldQ10:           'Sleep quality',
       minutesSuffix:      ' min',
-      createChild:        'Create new child',
+      createChild:        'Add a child',
       joinChild:          'Join with code',
       childNamePlaceholder: "Child's name",
       codePlaceholder:    'XXXXXX',
-      createBtn:          'Create',
+      createBtn:          'Add',
       joinBtn:            'Join',
       shareCodeLabel:     'Share code',
       shareCodeHint:      'Share this code with the other parent',
+      shareCodeHintSelf:  'Share with your doctor or someone you want to give access',
       copyCode:           'Copy',
-      addChildBtn:        'Add child',
+      addChildBtn:        'Add person',
       thisChild:          'This child',
+      thisChildSelf:      'Yourself',
       backLink:           '← Back',
       switchChild:        'Switch',
       signOutSmall:       'Sign out',
-      childrenSection:    'Children',
+      childrenSection:    'People',
+      createSelf:         'Track my own sleep',
+      createSelfDesc:     'Log your own sleep — for yourself',
+      createSelfBtn:      'Add myself',
+      orChild:            'or add a child',
+      myselfLabel:        'Myself',
     }
   };
 
@@ -697,6 +739,7 @@ create policy "Members manage entries" on sleep_entries
     renderLang();
     renderUserAvatar();
     showScreen('app');
+    renderPersonSwitcher();
     switchTab('new');
   }
 
@@ -787,6 +830,7 @@ create policy "Members manage entries" on sleep_entries
     renderLang();
     renderUserAvatar();
     showScreen('app');
+    renderPersonSwitcher();
     switchTab('new');
   }
 
@@ -795,6 +839,55 @@ create policy "Members manage entries" on sleep_entries
     const idx = children.findIndex(c => c.id === currentChild.id);
     const next = children[(idx + 1) % children.length];
     await selectChild(next);
+  }
+
+  async function createSelf() {
+    const selfId = localStorage.getItem('sovn-self-id');
+    if (selfId) {
+      const existing = children.find(c => c.id === selfId);
+      if (existing) { await selectChild(existing); return; }
+    }
+    const name = user?.user_metadata?.full_name || (lang === 'no' ? 'Meg selv' : 'Myself');
+    const shareCode = generateShareCode();
+    const { data, error } = await sb.rpc('create_child', {
+      child_name: name,
+      child_share_code: shareCode
+    });
+    if (error) { showFeedback('create-error', error.message, true); return; }
+    const child = typeof data === 'string' ? JSON.parse(data) : data;
+    localStorage.setItem('sovn-self-id', child.id);
+    children.push(child);
+    await selectChild(child);
+  }
+
+  function renderPersonSwitcher() {
+    const container = document.getElementById('person-switcher');
+    if (!container) return;
+    if (children.length <= 1) {
+      container.innerHTML = '';
+      return;
+    }
+    const selfId = localStorage.getItem('sovn-self-id');
+    container.innerHTML = '';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'flex flex-wrap gap-2';
+    children.forEach(child => {
+      const isActive = child.id === currentChild?.id;
+      const isSelfEntry = child.id === selfId;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      const emoji = isSelfEntry ? '👤' : '👶';
+      const label = isSelfEntry ? (lang === 'no' ? 'Meg selv' : 'Myself') : child.name;
+      btn.textContent = `${emoji} ${label}`;
+      btn.className = `px-4 py-2 rounded-xl text-sm font-semibold transition border ${
+        isActive
+          ? 'bg-indigo-600 text-white border-indigo-600'
+          : 'bg-white text-slate-600 border-slate-200 hover:bg-indigo-50 hover:border-indigo-300'
+      }`;
+      btn.onclick = () => selectChild(child);
+      wrapper.appendChild(btn);
+    });
+    container.appendChild(wrapper);
   }
 
   async function copyShareCode() {
@@ -903,11 +996,17 @@ create policy "Members manage entries" on sleep_entries
     }
   }
 
-  function editEntry(date) {
+  function onDateChange(date) {
+    if (!date) return;
+    const entry = entries.find(en => en.date === date);
+    if (entry) editEntry(date, true);
+  }
+
+  function editEntry(date, keepDate = false) {
     const entry = entries.find(en => en.date === date);
     if (!entry) return;
 
-    document.getElementById('entry-date').value = entry.date;
+    if (!keepDate) document.getElementById('entry-date').value = entry.date;
 
     // Q1 radios
     document.querySelectorAll('input[name="q1"]').forEach(r => {
@@ -945,8 +1044,14 @@ create policy "Members manage entries" on sleep_entries
       r.checked = parseInt(r.value) === entry.q10;
     });
 
-    switchTab('new');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Re-render styled radio groups to reflect checked state
+    renderRadioGroup('q1-radios',  'q1',  t().q1Scale);
+    renderRadioGroup('q10-radios', 'q10', t().q10Scale);
+
+    if (!keepDate) {
+      switchTab('new');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   }
 
   // ============================================================
@@ -989,12 +1094,16 @@ create policy "Members manage entries" on sleep_entries
     }
     section.classList.remove('hidden');
     list.innerHTML = '';
+    const selfId = localStorage.getItem('sovn-self-id');
     children.forEach(child => {
       const row = document.createElement('div');
       row.className = 'flex items-center justify-between py-1';
       const nameSpan = document.createElement('span');
       nameSpan.className = 'text-sm text-slate-700' + (child.id === currentChild?.id ? ' font-semibold text-indigo-600' : '');
-      nameSpan.textContent = child.name;
+      const isSelfEntry = child.id === selfId;
+      const emoji = isSelfEntry ? '👤 ' : '';
+      const label = isSelfEntry ? (lang === 'no' ? 'Meg selv' : 'Myself') : child.name;
+      nameSpan.textContent = emoji + label;
       row.appendChild(nameSpan);
       if (child.id !== currentChild?.id) {
         const btn = document.createElement('button');
@@ -1048,45 +1157,55 @@ create policy "Members manage entries" on sleep_entries
     // Child badge
     const badge = document.getElementById('child-badge');
     if (badge) {
-      badge.textContent = currentChild?.name || '';
+      const selfActive = isSelf();
+      const badgeEmoji = selfActive ? '👤' : '';
+      const badgeLabel = selfActive ? tx.myselfLabel : (currentChild?.name || '');
+      badge.textContent = badgeEmoji ? `${badgeEmoji} ${badgeLabel}` : badgeLabel;
       badge.style.cursor = children.length > 1 ? 'pointer' : 'default';
     }
 
+    // Children setup screen
+    setText('create-self-heading', tx.createSelf);
+    setText('create-self-desc', tx.createSelfDesc);
+    setText('btn-create-self', tx.createSelfBtn);
+    setText('label-or-child', tx.orChild);
+
     // New entry form
+    const self = isSelf();
     setText('label-date', tx.labelDate);
     setText('section-before', tx.sectionBefore);
     setText('section-morning', tx.sectionMorning);
 
-    setText('label-q1', tx.q1(name));
+    setText('label-q1', tx.q1(name, self));
     renderRadioGroup('q1-radios', 'q1', tx.q1Scale);
 
-    setText('label-q2', tx.q2(name));
+    setText('label-q2', tx.q2(name, self));
     setText('label-yes', tx.yes);
     setText('label-no', tx.no_);
     setAttr('nap-times', 'placeholder', tx.q2NapTimes);
 
-    setText('label-q3', tx.q3(name));
-    setText('label-q4', tx.q4(name));
+    setText('label-q3', tx.q3(name, self));
+    setText('label-q4', tx.q4(name, self));
     setText('label-in-bed', tx.labelInBed);
     setText('label-sleep-attempt', tx.labelSleepAttempt);
 
-    setText('label-q5', tx.q5(name));
+    setText('label-q5', tx.q5(name, self));
     setText('label-minutes-1', tx.minutes);
-    setText('label-q6', tx.q6(name));
-    setText('label-q7', tx.q7(name));
+    setText('label-q6', tx.q6(name, self));
+    setText('label-q7', tx.q7(name, self));
     setText('label-minutes-2', tx.minutes);
-    setText('label-q8', tx.q8(name));
-    setText('label-q9', tx.q9(name));
+    setText('label-q8', tx.q8(name, self));
+    setText('label-q9', tx.q9(name, self));
 
-    setText('label-q10', tx.q10(name));
+    setText('label-q10', tx.q10(name, self));
     renderRadioGroup('q10-radios', 'q10', tx.q10Scale);
 
     setText('btn-save-entry', tx.saveEntry);
 
     // Settings
-    setText('label-this-child', tx.thisChild);
+    setText('label-this-child', self ? tx.thisChildSelf : tx.thisChild);
     setText('label-share-code', tx.shareCodeLabel);
-    setText('share-code-hint', tx.shareCodeHint);
+    setText('share-code-hint', self ? tx.shareCodeHintSelf : tx.shareCodeHint);
     setText('btn-copy-code', tx.copyCode);
     setText('label-children-section', tx.childrenSection);
     setText('btn-add-child', tx.addChildBtn);
