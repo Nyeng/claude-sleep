@@ -664,6 +664,27 @@ create policy "Members manage entries" on sleep_entries
 
     <!-- ===== TAB: HISTORY ===== -->
     <div id="tab-history" class="tab-panel hidden">
+
+      <!-- Sleep chart -->
+      <div id="sleep-chart" class="card hidden" style="padding:16px 16px 12px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <span class="accent-label" id="chart-title"></span>
+          <div style="display:flex;gap:3px;">
+            <button id="chart-period-14" onclick="setChartPeriod(14)" style="font-family:'Syne',sans-serif;font-size:0.5625rem;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;padding:3px 8px;border-radius:5px;cursor:pointer;border:1px solid var(--border);transition:all 0.15s;"></button>
+            <button id="chart-period-28" onclick="setChartPeriod(28)" style="font-family:'Syne',sans-serif;font-size:0.5625rem;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;padding:3px 8px;border-radius:5px;cursor:pointer;border:1px solid var(--border);transition:all 0.15s;"></button>
+            <button id="chart-period-0"  onclick="setChartPeriod(0)"  style="font-family:'Syne',sans-serif;font-size:0.5625rem;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;padding:3px 8px;border-radius:5px;cursor:pointer;border:1px solid var(--border);transition:all 0.15s;"></button>
+          </div>
+        </div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:14px;">
+          <button id="chart-metric-q10"              onclick="setChartMetric('q10')"              style="font-family:'Syne',sans-serif;font-size:0.5625rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;padding:4px 10px;border-radius:6px;cursor:pointer;border:1px solid;transition:all 0.15s;"></button>
+          <button id="chart-metric-sleep_onset"      onclick="setChartMetric('sleep_onset')"      style="font-family:'Syne',sans-serif;font-size:0.5625rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;padding:4px 10px;border-radius:6px;cursor:pointer;border:1px solid;transition:all 0.15s;"></button>
+          <button id="chart-metric-awakenings_count" onclick="setChartMetric('awakenings_count')" style="font-family:'Syne',sans-serif;font-size:0.5625rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;padding:4px 10px;border-radius:6px;cursor:pointer;border:1px solid;transition:all 0.15s;"></button>
+          <button id="chart-metric-q1"               onclick="setChartMetric('q1')"               style="font-family:'Syne',sans-serif;font-size:0.5625rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;padding:4px 10px;border-radius:6px;cursor:pointer;border:1px solid;transition:all 0.15s;"></button>
+        </div>
+        <svg id="chart-svg" viewBox="0 0 480 155" style="width:100%;height:auto;display:block;overflow:visible;"></svg>
+        <div id="chart-stats" style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);"></div>
+      </div>
+
       <div id="history-list" style="display:flex;flex-direction:column;gap:10px;"></div>
       <p id="history-empty" class="hidden" style="text-align:center;color:var(--text-3);font-size:0.9375rem;font-style:italic;padding:40px 0;"></p>
     </div>
@@ -727,9 +748,11 @@ create policy "Members manage entries" on sleep_entries
   let children       = [];
   let currentChild   = null;
   let lang           = localStorage.getItem('sovn-lang') || 'no';
-  let currentTab     = 'new';
-  let entries        = [];
-  const expandedEntries = new Set();
+  let currentTab          = 'new';
+  let entries             = [];
+  let currentChartMetric  = 'q10';
+  let currentChartPeriod  = 14;
+  const expandedEntries   = new Set();
 
   function isSelf() { return currentChild && currentChild.id === localStorage.getItem('sovn-self-id'); }
   function getChildName() {
@@ -780,6 +803,9 @@ create policy "Members manage entries" on sleep_entries
       removeMemberConfirm:(name)=>`Fjerne ${name} sin tilgang? De vil ikke lenger kunne se eller registrere søvn for dette barnet.`,removeMemberError:'Kunne ikke fjerne tilgangen. Prøv igjen.',membersLabel:'Foresatte med tilgang',
       createSelf:'Registrer min søvn',createSelfDesc:'Logg din egen søvn – for deg selv',
       createSelfBtn:'Legg til meg selv',orChild:'eller legg til barn',myselfLabel:'Meg selv',
+      chartTitle:'Utvikling',chartPeriod14:'2 uker',chartPeriod28:'4 uker',chartPeriodAll:'Alt',
+      chartMetricQ10:'Søvnkvalitet',chartMetricOnset:'Innsovning',chartMetricAwakenings:'Oppvåkninger',chartMetricQ1:'Dagtid',
+      chartAvg:'Snitt',chartTrend:'Trend',chartRange:'Spenn',chartNoData:'Ikke nok data enda',chartUnit_min:' min',
     },
     en: {
       appTitle:'Sleep Diary',authTitle:'Sleep Diary',signInGoogle:'Sign in with Google',langSwitch:'NO',
@@ -820,6 +846,9 @@ create policy "Members manage entries" on sleep_entries
       removeMemberConfirm:(name)=>`Remove ${name}'s access? They will no longer be able to view or log sleep for this child.`,removeMemberError:'Could not remove access. Please try again.',membersLabel:'People with access',
       createSelf:'Track my own sleep',createSelfDesc:'Log your own sleep — for yourself',
       createSelfBtn:'Add myself',orChild:'or add a child',myselfLabel:'Myself',
+      chartTitle:'Trends',chartPeriod14:'2 weeks',chartPeriod28:'4 weeks',chartPeriodAll:'All',
+      chartMetricQ10:'Sleep quality',chartMetricOnset:'Onset',chartMetricAwakenings:'Awakenings',chartMetricQ1:'Daytime',
+      chartAvg:'Avg',chartTrend:'Trend',chartRange:'Range',chartNoData:'Not enough data yet',chartUnit_min:' min',
     }
   };
   function t() { return T[lang]; }
@@ -1296,9 +1325,210 @@ create policy "Members manage entries" on sleep_entries
   }
 
   // ============================================================
+  // CHART
+  // ============================================================
+  function setChartMetric(m) { currentChartMetric = m; renderSleepChart(); }
+  function setChartPeriod(p) { currentChartPeriod = p; renderSleepChart(); }
+
+  function renderSleepChart() {
+    const container = document.getElementById('sleep-chart');
+    if (!container) return;
+    const sorted = [...entries].reverse(); // asc by date
+    if (sorted.length < 2) { container.classList.add('hidden'); return; }
+    container.classList.remove('hidden');
+
+    const tx = t();
+
+    // Period filter
+    const data = currentChartPeriod === 0 ? sorted : sorted.slice(-currentChartPeriod);
+
+    // Update SVG
+    document.getElementById('chart-svg').innerHTML = buildChartSVG(data);
+
+    // Update metric buttons
+    const metricCfg = {
+      q10:              { label: tx.chartMetricQ10,         activeColor: '#274d3a', activeBg: '#274d3a' },
+      sleep_onset:      { label: tx.chartMetricOnset,       activeColor: '#b8401e', activeBg: '#b8401e' },
+      awakenings_count: { label: tx.chartMetricAwakenings,  activeColor: '#b8401e', activeBg: '#b8401e' },
+      q1:               { label: tx.chartMetricQ1,          activeColor: '#274d3a', activeBg: '#274d3a' },
+    };
+    Object.entries(metricCfg).forEach(([m, cfg]) => {
+      const btn = document.getElementById(`chart-metric-${m}`);
+      if (!btn) return;
+      btn.textContent = cfg.label;
+      const active = m === currentChartMetric;
+      btn.style.background = active ? cfg.activeBg : 'transparent';
+      btn.style.color      = active ? '#fff' : 'var(--text-3)';
+      btn.style.borderColor= active ? cfg.activeBg : 'var(--border)';
+    });
+
+    // Update period buttons
+    [[14, tx.chartPeriod14], [28, tx.chartPeriod28], [0, tx.chartPeriodAll]].forEach(([p, label]) => {
+      const btn = document.getElementById(`chart-period-${p}`);
+      if (!btn) return;
+      btn.textContent = label;
+      const active = p === currentChartPeriod;
+      btn.style.background = active ? 'var(--accent-soft)' : 'transparent';
+      btn.style.color      = active ? 'var(--accent)' : 'var(--text-3)';
+      btn.style.borderColor= active ? 'rgba(184,64,30,0.3)' : 'var(--border)';
+    });
+
+    // Stats
+    renderChartStats(data);
+
+    // Title
+    setText('chart-title', tx.chartTitle);
+  }
+
+  function buildChartSVG(data) {
+    const tx = t();
+    const metric = currentChartMetric;
+    const W = 480, H = 155;
+    const pad = { top: 14, right: 10, bottom: 30, left: 26 };
+    const cw = W - pad.left - pad.right, ch = H - pad.top - pad.bottom;
+
+    const isHigherBetter = metric === 'q10';
+    const isMinutesMetric = metric === 'sleep_onset' || metric === 'wake_time';
+
+    // Scale bounds
+    let minVal, maxVal;
+    if (metric === 'q10' || metric === 'q1') { minVal = 1; maxVal = 5; }
+    else {
+      const vals = data.map(e => e[metric]).filter(v => v != null).map(Number);
+      if (!vals.length) return noDataSVG(W, H, tx.chartNoData);
+      minVal = 0;
+      maxVal = metric === 'sleep_onset'
+        ? Math.max(Math.ceil(Math.max(...vals) / 15) * 15, 30)
+        : Math.max(Math.ceil(Math.max(...vals)), 4);
+    }
+
+    const xPos = i  => pad.left + (i / Math.max(data.length - 1, 1)) * cw;
+    const yPos = v  => pad.top  + ch - ((v - minVal) / (maxVal - minVal)) * ch;
+
+    // Points with non-null values
+    const pts = data
+      .map((e, i) => ({ x: xPos(i), y: yPos(Number(e[metric])), val: Number(e[metric]), date: e.date, i }))
+      .filter(p => data[p.i][metric] != null);
+
+    if (pts.length < 1) return noDataSVG(W, H, tx.chartNoData);
+
+    // Smooth bezier path
+    const line = smoothPath(pts);
+    const area = pts.length > 1
+      ? `${line} L${pts.at(-1).x} ${pad.top + ch} L${pts[0].x} ${pad.top + ch} Z`
+      : '';
+
+    const isGood  = isHigherBetter || metric === 'q1'; // q1 lower=better, invert dot coloring
+    const lineClr = (metric === 'q10' || metric === 'q1') ? '#274d3a' : '#b8401e';
+    const gradClr = lineClr;
+    const gradId  = `g${metric.replace('_','')}`;
+
+    // Y gridlines + labels
+    const yTicks = (metric === 'q10' || metric === 'q1') ? [1,2,3,4,5] : [minVal, Math.round((minVal+maxVal)/2), maxVal];
+    const grid = yTicks.map(v => {
+      const y = yPos(v).toFixed(1);
+      return `<line x1="${pad.left}" y1="${y}" x2="${W-pad.right}" y2="${y}" stroke="var(--border)" stroke-width="0.5" stroke-dasharray="3 3"/>
+              <text x="${pad.left-4}" y="${(Number(y)+3.5).toFixed(1)}" text-anchor="end" fill="var(--text-3)" font-size="9" font-family="Syne,sans-serif" font-weight="700">${v}</text>`;
+    }).join('');
+
+    // X date labels
+    const everyN = data.length <= 7 ? 1 : data.length <= 14 ? 2 : data.length <= 21 ? 3 : Math.ceil(data.length / 7);
+    const xLabels = data.map((e, i) => {
+      if (i % everyN !== 0 && i !== data.length - 1) return '';
+      const d = new Date(e.date + 'T12:00:00');
+      const lbl = d.toLocaleDateString(lang === 'no' ? 'nb-NO' : 'en-GB', { day:'numeric', month:'short' });
+      return `<text x="${xPos(i).toFixed(1)}" y="${H-3}" text-anchor="middle" fill="var(--text-3)" font-size="8.5" font-family="Syne,sans-serif" font-weight="700">${lbl}</text>`;
+    }).join('');
+
+    // Dots colored by value
+    function dotColor(val) {
+      if (metric === 'q10') return val >= 4 ? '#274d3a' : val === 3 ? '#8a7a5a' : '#b8401e';
+      if (metric === 'q1')  return val <= 2 ? '#274d3a' : val === 3 ? '#8a7a5a' : '#b8401e';
+      if (metric === 'sleep_onset') return val <= 15 ? '#274d3a' : val <= 30 ? '#8a7a5a' : '#b8401e';
+      return val === 0 ? '#274d3a' : val <= 2 ? '#8a7a5a' : '#b8401e';
+    }
+    const dots = pts.map(p =>
+      `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.5" fill="${dotColor(p.val)}" stroke="var(--surface)" stroke-width="1.5"/>`
+    ).join('');
+
+    return `<defs>
+      <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${gradClr}" stop-opacity="0.2"/>
+        <stop offset="100%" stop-color="${gradClr}" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    ${grid}
+    ${xLabels}
+    ${area ? `<path d="${area}" fill="url(#${gradId})"/>` : ''}
+    <path d="${line}" fill="none" stroke="${lineClr}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    ${dots}`;
+  }
+
+  function noDataSVG(W, H, msg) {
+    return `<text x="${W/2}" y="${H/2}" text-anchor="middle" dominant-baseline="middle" fill="var(--text-3)" font-size="12" font-style="italic" font-family="Spectral,Georgia,serif">${msg}</text>`;
+  }
+
+  function smoothPath(pts) {
+    if (!pts.length) return '';
+    if (pts.length === 1) return `M${pts[0].x} ${pts[0].y}`;
+    let d = `M${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+    for (let i = 1; i < pts.length; i++) {
+      const p0 = pts[i-2] ?? pts[i-1], p1 = pts[i-1], p2 = pts[i], p3 = pts[i+1] ?? pts[i];
+      const cp1x = p1.x + (p2.x - p0.x) / 6, cp1y = p1.y + (p2.y - p0.y) / 6;
+      const cp2x = p2.x - (p3.x - p1.x) / 6, cp2y = p2.y - (p3.y - p1.y) / 6;
+      d += ` C${cp1x.toFixed(1)} ${cp1y.toFixed(1)},${cp2x.toFixed(1)} ${cp2y.toFixed(1)},${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+    }
+    return d;
+  }
+
+  function renderChartStats(data) {
+    const el = document.getElementById('chart-stats');
+    if (!el) return;
+    const tx = t();
+    const metric = currentChartMetric;
+    const vals = data.map(e => e[metric]).filter(v => v != null).map(Number);
+    if (!vals.length) { el.innerHTML = ''; return; }
+
+    const avg = (vals.reduce((a,b) => a+b,0) / vals.length).toFixed(1);
+    const min = Math.min(...vals), max = Math.max(...vals);
+    const unit = (metric === 'sleep_onset' || metric === 'wake_time') ? tx.chartUnit_min : '';
+
+    // Trend: compare first half vs second half
+    let trend = '→', trendColor = 'var(--text-3)';
+    if (vals.length >= 4) {
+      const h = Math.floor(vals.length / 2);
+      const a1 = vals.slice(0,h).reduce((a,b)=>a+b,0)/h;
+      const a2 = vals.slice(-h).reduce((a,b)=>a+b,0)/h;
+      const d  = a2 - a1;
+      const higherIsBetter = metric === 'q10';
+      const lowerIsBetter  = metric !== 'q10';
+      if (Math.abs(d) > 0.25) {
+        const improving = higherIsBetter ? d > 0 : d < 0;
+        trend = improving ? '↑' : '↓';
+        trendColor = improving ? 'var(--green)' : 'var(--accent)';
+      }
+    }
+
+    const stat = (label, value) =>
+      `<span style="display:flex;flex-direction:column;gap:1px;">
+        <span style="font-family:'Syne',sans-serif;font-size:0.5625rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-3);">${label}</span>
+        <span style="font-family:'Syne',sans-serif;font-size:0.875rem;font-weight:800;color:var(--text-1);">${value}</span>
+       </span>`;
+
+    el.innerHTML =
+      stat(tx.chartAvg, `${avg}${unit}`) +
+      `<span style="display:flex;flex-direction:column;gap:1px;">
+        <span style="font-family:'Syne',sans-serif;font-size:0.5625rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-3);">${tx.chartTrend}</span>
+        <span style="font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;color:${trendColor};">${trend}</span>
+       </span>` +
+      stat(tx.chartRange, `${min}–${max}${unit}`);
+  }
+
+  // ============================================================
   // HISTORY
   // ============================================================
   function renderHistory() {
+    renderSleepChart();
     const list  = document.getElementById('history-list');
     const empty = document.getElementById('history-empty');
     list.innerHTML = '';
