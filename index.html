@@ -375,6 +375,8 @@ create policy "Users read own memberships" on child_members
   for select using (user_id = auth.uid());
 create policy "Users join child" on child_members
   for insert to authenticated with check (user_id = auth.uid());
+create policy "Users delete own memberships" on child_members
+  for delete using (user_id = auth.uid());
 
 create policy "Members manage entries" on sleep_entries
   for all using (exists (select 1 from child_members where child_id = sleep_entries.child_id and user_id = auth.uid()))
@@ -750,6 +752,7 @@ create policy "Members manage entries" on sleep_entries
       shareCodeHintSelf:'Del koden med legen eller noen du vil gi tilgang',copyCode:'Kopier',
       addChildBtn:'+ Legg til person',thisChild:'Dette barnet',thisChildSelf:'Deg selv',
       backLink:'← Tilbake',switchChild:'Bytt',signOutSmall:'Logg ut',childrenSection:'Personer',
+      removeAccess:'Fjern',removeConfirm:(name)=>`Fjerne "${name}" fra listen din? Du mister tilgang til dagboken, men registreringene beholdes.`,removeError:'Kunne ikke fjerne. Prøv igjen.',
       createSelf:'Registrer min søvn',createSelfDesc:'Logg din egen søvn – for deg selv',
       createSelfBtn:'Legg til meg selv',orChild:'eller legg til barn',myselfLabel:'Meg selv',
     },
@@ -788,6 +791,7 @@ create policy "Members manage entries" on sleep_entries
       shareCodeHintSelf:'Share with your doctor or someone you want to give access',copyCode:'Copy',
       addChildBtn:'+ Add person',thisChild:'This child',thisChildSelf:'Yourself',
       backLink:'← Back',switchChild:'Switch',signOutSmall:'Sign out',childrenSection:'People',
+      removeAccess:'Remove',removeConfirm:(name)=>`Remove "${name}" from your list? You'll lose access to the diary, but entries are kept.`,removeError:'Could not remove. Please try again.',
       createSelf:'Track my own sleep',createSelfDesc:'Log your own sleep — for yourself',
       createSelfBtn:'Add myself',orChild:'or add a child',myselfLabel:'Myself',
     }
@@ -1073,12 +1077,11 @@ create policy "Members manage entries" on sleep_entries
     const section = document.getElementById('settings-children-section');
     const list    = document.getElementById('settings-children-list');
     if (!section || !list) return;
-    if (children.length <= 1) { section.classList.add('hidden'); return; }
     section.classList.remove('hidden'); list.innerHTML = '';
     const selfId = localStorage.getItem('sovn-self-id');
     children.forEach(child => {
       const row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;';
+      row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;';
       const nameSpan = document.createElement('span');
       const isActive = child.id === currentChild?.id;
       const isSelf   = child.id === selfId;
@@ -1086,18 +1089,64 @@ create policy "Members manage entries" on sleep_entries
       nameSpan.innerHTML = isActive
         ? `<span style="display:inline-flex;align-items:center;gap:7px;">${label}<span style="font-size:0.6rem;background:var(--green);color:#fff;font-family:'Syne',sans-serif;font-weight:800;letter-spacing:0.04em;text-transform:uppercase;padding:2px 7px;border-radius:99px;">${lang === 'no' ? 'Valgt' : 'Active'}</span></span>`
         : label;
-      nameSpan.style.cssText = `font-size:0.875rem;${isActive ? 'font-weight:600;color:var(--text-1);' : 'color:var(--text-2);'}`;
+      nameSpan.style.cssText = `font-size:0.875rem;flex:1;${isActive ? 'font-weight:600;color:var(--text-1);' : 'color:var(--text-2);'}`;
       row.appendChild(nameSpan);
-      if (!isActive) {
-        const btn = document.createElement('button');
-        btn.textContent = t().switchChild;
-        btn.className = 'btn-ghost';
-        btn.style.cssText = 'font-size:0.625rem;padding:5px 10px;';
-        btn.onclick = () => selectChild(child);
-        row.appendChild(btn);
+
+      const actions = document.createElement('div');
+      actions.style.cssText = 'display:flex;align-items:center;gap:6px;flex-shrink:0;';
+
+      if (!isActive && children.length > 1) {
+        const switchBtn = document.createElement('button');
+        switchBtn.textContent = t().switchChild;
+        switchBtn.className = 'btn-ghost';
+        switchBtn.style.cssText = 'font-size:0.625rem;padding:5px 10px;';
+        switchBtn.onclick = () => selectChild(child);
+        actions.appendChild(switchBtn);
       }
+
+      const removeBtn = document.createElement('button');
+      removeBtn.textContent = t().removeAccess;
+      removeBtn.style.cssText = 'font-family:"Syne",sans-serif;font-weight:700;font-size:0.625rem;letter-spacing:0.05em;text-transform:uppercase;padding:5px 10px;border-radius:6px;cursor:pointer;border:1px solid rgba(184,64,30,0.25);background:transparent;color:var(--accent);transition:all 0.15s;';
+      removeBtn.onmouseover = () => { removeBtn.style.background = 'var(--accent-soft)'; };
+      removeBtn.onmouseout  = () => { removeBtn.style.background = 'transparent'; };
+      removeBtn.onclick = () => removeChild(child);
+      actions.appendChild(removeBtn);
+
+      row.appendChild(actions);
       list.appendChild(row);
+
+      if (children.indexOf(child) < children.length - 1) {
+        const divider = document.createElement('div');
+        divider.style.cssText = 'height:1px;background:var(--border);margin:2px 0;';
+        list.appendChild(divider);
+      }
     });
+  }
+
+  async function removeChild(child) {
+    const tx = t();
+    const selfId = localStorage.getItem('sovn-self-id');
+    const isSelfEntry = child.id === selfId;
+    const displayName = isSelfEntry ? (lang === 'no' ? 'Meg selv' : 'Myself') : child.name;
+    if (!confirm(tx.removeConfirm(displayName))) return;
+
+    const { error } = await sb.from('child_members')
+      .delete()
+      .eq('child_id', child.id)
+      .eq('user_id', user.id);
+
+    if (error) { alert(tx.removeError); return; }
+
+    if (isSelfEntry) localStorage.removeItem('sovn-self-id');
+    children = children.filter(c => c.id !== child.id);
+
+    if (children.length === 0) {
+      currentChild = null;
+      showScreen('children');
+    } else {
+      if (currentChild?.id === child.id) await selectChild(children[0]);
+      else renderSettingsChildrenList();
+    }
   }
 
   // ============================================================
