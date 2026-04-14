@@ -403,6 +403,7 @@ create policy "Members manage entries" on sleep_entries
       </p>
     </div>
 
+    <!-- Google sign-in -->
     <button onclick="signInWithGoogle()" style="width:100%; display:flex; align-items:center; justify-content:center; gap:12px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:13px 16px; cursor:pointer; transition: border-color 0.15s, box-shadow 0.15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.boxShadow='0 0 0 3px rgba(184,64,30,0.1)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
       <svg width="18" height="18" viewBox="0 0 48 48" fill="none">
         <path d="M47.532 24.552c0-1.636-.132-3.2-.388-4.704H24.48v8.898h12.944c-.556 3.01-2.242 5.562-4.782 7.278v6.048h7.742c4.532-4.176 7.148-10.326 7.148-17.52z" fill="#4285F4"/>
@@ -412,6 +413,37 @@ create policy "Members manage entries" on sleep_entries
       </svg>
       <span id="auth-google-btn-text" style="font-family:'Syne',sans-serif; font-weight:700; font-size:0.8125rem; letter-spacing:0.04em; color:var(--text-1);"></span>
     </button>
+
+    <!-- Divider -->
+    <div style="display:flex; align-items:center; gap:10px; margin:18px 0;">
+      <div style="flex:1; height:1px; background:var(--border);"></div>
+      <span id="auth-or-text" style="font-family:'Syne',sans-serif; font-size:0.625rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-3);"></span>
+      <div style="flex:1; height:1px; background:var(--border);"></div>
+    </div>
+
+    <!-- Magic link form -->
+    <div id="auth-magic-form">
+      <div style="margin-bottom:10px;">
+        <input id="auth-email-input" type="email" autocomplete="email" class="field"
+          style="width:100%;"
+          oninput="document.getElementById('auth-magic-error').textContent=''"
+        />
+      </div>
+      <button onclick="sendMagicLink()" id="auth-magic-btn"
+        style="width:100%; background:var(--green); color:#fff; border:none; border-radius:8px; padding:13px 16px; cursor:pointer; font-family:'Syne',sans-serif; font-weight:700; font-size:0.8125rem; letter-spacing:0.04em; transition: background 0.15s;"
+        onmouseover="this.style.background='var(--green-hover)'" onmouseout="this.style.background='var(--green)'">
+        <span id="auth-magic-btn-text"></span>
+      </button>
+      <p id="auth-magic-error" style="font-size:0.6875rem; color:var(--accent); margin-top:8px; min-height:1em;"></p>
+    </div>
+
+    <!-- Confirmation message shown after sending -->
+    <div id="auth-magic-sent" class="hidden" style="background:var(--green-soft); border:1px solid rgba(39,77,58,0.18); border-radius:8px; padding:16px; text-align:center;">
+      <div style="font-size:1.5rem; margin-bottom:8px;">📬</div>
+      <p id="auth-magic-sent-text" style="font-size:0.8125rem; color:var(--green); font-weight:600; margin-bottom:4px;"></p>
+      <p id="auth-magic-sent-sub" style="font-size:0.75rem; color:var(--text-3); font-style:italic;"></p>
+      <button onclick="resetMagicForm()" style="margin-top:12px; background:none; border:none; cursor:pointer; font-family:'Syne',sans-serif; font-size:0.625rem; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-3);" id="auth-magic-back-btn"></button>
+    </div>
 
     <p style="font-size:0.6875rem; color:var(--text-3); margin-top:16px; font-style:italic;">
       Ved å logge inn godtar du vår
@@ -681,6 +713,9 @@ create policy "Members manage entries" on sleep_entries
   const T = {
     no: {
       appTitle:'Søvndagbok',authTitle:'Søvndagbok',signInGoogle:'Logg inn med Google',langSwitch:'EN',
+      authOr:'eller',emailPlaceholder:'E-postadresse',sendMagicLink:'Send innloggingslenke',
+      magicSent:'Sjekk e-posten din',magicSentSub:'Vi har sendt deg en innloggingslenke. Sjekk søppelpost om den ikke dukker opp.',
+      magicBack:'← Prøv igjen',magicEmailRequired:'Skriv inn e-postadressen din.',magicError:'Noe gikk galt. Prøv igjen.',
       tabNew:'Ny registrering',tabHistory:'Historikk',tabSettings:'Innstillinger',
       labelDate:'Dato',sectionBefore:'Fylles ut før leggetid',sectionMorning:'Fylles ut om morgenen',
       q1:(n,s)=>s?'Hvordan har du fungert på dagtid?':`Hvordan har ${n} fungert på dagtid?`,
@@ -716,6 +751,9 @@ create policy "Members manage entries" on sleep_entries
     },
     en: {
       appTitle:'Sleep Diary',authTitle:'Sleep Diary',signInGoogle:'Sign in with Google',langSwitch:'NO',
+      authOr:'or',emailPlaceholder:'Email address',sendMagicLink:'Send magic link',
+      magicSent:'Check your inbox',magicSentSub:'We sent you a sign-in link. Check your spam folder if it doesn\'t arrive.',
+      magicBack:'← Try again',magicEmailRequired:'Please enter your email address.',magicError:'Something went wrong. Please try again.',
       tabNew:'New entry',tabHistory:'History',tabSettings:'Settings',
       labelDate:'Date',sectionBefore:'Fill out before bedtime',sectionMorning:'Fill out in the morning',
       q1:(n,s)=>s?'How did you function during the day?':`How did ${n} function during the day?`,
@@ -802,6 +840,38 @@ create policy "Members manage entries" on sleep_entries
   async function signInWithGoogle() {
     await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
   }
+
+  async function sendMagicLink() {
+    const tx = t();
+    const email = document.getElementById('auth-email-input').value.trim();
+    if (!email) {
+      document.getElementById('auth-magic-error').textContent = tx.magicEmailRequired;
+      return;
+    }
+    const btn = document.getElementById('auth-magic-btn');
+    btn.disabled = true;
+    btn.style.opacity = '0.6';
+    const { error } = await sb.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.origin }
+    });
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    if (error) {
+      document.getElementById('auth-magic-error').textContent = tx.magicError;
+      return;
+    }
+    document.getElementById('auth-magic-form').classList.add('hidden');
+    document.getElementById('auth-magic-sent').classList.remove('hidden');
+  }
+
+  function resetMagicForm() {
+    document.getElementById('auth-magic-sent').classList.add('hidden');
+    document.getElementById('auth-magic-form').classList.remove('hidden');
+    document.getElementById('auth-email-input').value = '';
+    document.getElementById('auth-magic-error').textContent = '';
+  }
+
   async function signOut() { await sb.auth.signOut(); }
 
   // ============================================================
@@ -1025,6 +1095,13 @@ create policy "Members manage entries" on sleep_entries
   function renderLang() {
     const tx = t(); const name = getChildName(); const self = isSelf();
     setText('auth-title', tx.authTitle); setText('auth-google-btn-text', tx.signInGoogle); setText('auth-lang-btn', tx.langSwitch);
+    setText('auth-or-text', tx.authOr);
+    const emailInput = document.getElementById('auth-email-input');
+    if (emailInput) emailInput.placeholder = tx.emailPlaceholder;
+    setText('auth-magic-btn-text', tx.sendMagicLink);
+    setText('auth-magic-sent-text', tx.magicSent);
+    setText('auth-magic-sent-sub', tx.magicSentSub);
+    setText('auth-magic-back-btn', tx.magicBack);
     setText('children-title', tx.authTitle); setText('children-lang-btn', tx.langSwitch);
     setText('children-signout-btn', tx.signOutSmall); setText('children-back-link', tx.backLink);
     setText('create-child-heading', tx.createChild); setAttr('new-child-name', 'placeholder', tx.childNamePlaceholder);
