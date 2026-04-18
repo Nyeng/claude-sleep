@@ -770,7 +770,7 @@ create policy "Members manage entries" on sleep_entries
       magicSent:'Sjekk e-posten din',magicSentSub:'Vi har sendt deg en innloggingslenke. Sjekk søppelpost om den ikke dukker opp.',
       magicBack:'← Prøv igjen',magicEmailRequired:'Skriv inn e-postadressen din.',magicError:'Noe gikk galt. Prøv igjen.',
       tabNew:'Ny registrering',tabHistory:'Historikk',tabSettings:'Innstillinger',
-      labelDate:'Dato',sectionBefore:'Fylles ut før leggetid',sectionMorning:'Fylles ut om morgenen',
+      labelDate:'Dato',sectionBefore:(s)=>s?'Fyll ut om kvelden':'Fylles ut før leggetid',sectionMorning:(s)=>s?'Fyll ut om morgenen':'Fylles ut om morgenen',
       q1:(n,s)=>s?'Hvordan har du fungert på dagtid?':`Hvordan har ${n} fungert på dagtid?`,
       q1Scale:['1 – Svært bra','2 – Bra','3 – Middels','4 – Dårlig','5 – Svært dårlig'],
       q2:(n,s)=>s?'Har du sovet på dagtid?':`Har ${n} sovet på dagtid?`,
@@ -813,7 +813,7 @@ create policy "Members manage entries" on sleep_entries
       magicSent:'Check your inbox',magicSentSub:'We sent you a sign-in link. Check your spam folder if it doesn\'t arrive.',
       magicBack:'← Try again',magicEmailRequired:'Please enter your email address.',magicError:'Something went wrong. Please try again.',
       tabNew:'New entry',tabHistory:'History',tabSettings:'Settings',
-      labelDate:'Date',sectionBefore:'Fill out before bedtime',sectionMorning:'Fill out in the morning',
+      labelDate:'Date',sectionBefore:(s)=>s?'Fill out in the evening':'Fill out before bedtime',sectionMorning:(s)=>s?'Fill out in the morning':'Fill out in the morning',
       q1:(n,s)=>s?'How did you function during the day?':`How did ${n} function during the day?`,
       q1Scale:['1 – Very good','2 – Good','3 – Moderate','4 – Poor','5 – Very poor'],
       q2:(n,s)=>s?'Did you nap during the day?':`Did ${n} nap during the day?`,
@@ -878,6 +878,8 @@ create policy "Members manage entries" on sleep_entries
       return;
     }
     if (children.length === 0) { renderLang(); renderUserAvatar(); showScreen('children'); return; }
+    const metaSelfId = user?.user_metadata?.sovn_self_id;
+    if (metaSelfId && !localStorage.getItem('sovn-self-id')) localStorage.setItem('sovn-self-id', metaSelfId);
     const lastId = localStorage.getItem('sovn-last-child');
     currentChild = children.find(c => c.id === lastId) || children[0];
     await loadEntries(); setTodayDate(); renderLang(); renderUserAvatar();
@@ -983,7 +985,9 @@ create policy "Members manage entries" on sleep_entries
     const { data, error } = await sb.rpc('create_child', { child_name: name, child_share_code: generateShareCode() });
     if (error) { showFeedback('create-error', error.message, true); return; }
     const child = typeof data === 'string' ? JSON.parse(data) : data;
-    localStorage.setItem('sovn-self-id', child.id); children.push(child); await selectChild(child);
+    localStorage.setItem('sovn-self-id', child.id);
+    await sb.auth.updateUser({ data: { sovn_self_id: child.id } });
+    children.push(child); await selectChild(child);
   }
   function renderPersonSwitcher() {
     const container = document.getElementById('person-switcher');
@@ -1278,7 +1282,7 @@ create policy "Members manage entries" on sleep_entries
     }
     setText('create-self-heading', tx.createSelf); setText('create-self-desc', tx.createSelfDesc); setText('btn-create-self', tx.createSelfBtn);
     setText('label-or-child', tx.orChild);
-    setText('label-date', tx.labelDate); setText('section-before', tx.sectionBefore); setText('section-morning', tx.sectionMorning);
+    setText('label-date', tx.labelDate); setText('section-before', tx.sectionBefore(self)); setText('section-morning', tx.sectionMorning(self));
     setText('label-q1', tx.q1(name, self)); renderRadioGroup('q1-radios', 'q1', tx.q1Scale);
     setText('label-q2', tx.q2(name, self)); setText('label-yes', tx.yes); setText('label-no', tx.no_);
     setAttr('nap-times', 'placeholder', tx.q2NapTimes);
