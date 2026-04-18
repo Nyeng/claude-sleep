@@ -772,7 +772,7 @@ create policy "Members manage entries" on sleep_entries
       tabNew:'Ny registrering',tabHistory:'Historikk',tabSettings:'Innstillinger',
       labelDate:'Dato',sectionBefore:'Fylles ut før leggetid',sectionMorning:'Fylles ut om morgenen',
       q1:(n,s)=>s?'Hvordan har du fungert på dagtid?':`Hvordan har ${n} fungert på dagtid?`,
-      q1Scale:['1 – Svært bra','2 – Bra','3 – Middels','4 – Dårlig','5 – Svært dårlig'],
+      q1Scale:['1 – Svært dårlig','2 – Dårlig','3 – Middels','4 – Bra','5 – Svært bra'],
       q2:(n,s)=>s?'Har du sovet på dagtid?':`Har ${n} sovet på dagtid?`,
       q2NapTimes:'Oppgi tidspunkt og varighet',
       q3:(n,s)=>s?'Medikament (valgfritt)':`Medikament gitt til ${n} (valgfritt)`,
@@ -815,7 +815,7 @@ create policy "Members manage entries" on sleep_entries
       tabNew:'New entry',tabHistory:'History',tabSettings:'Settings',
       labelDate:'Date',sectionBefore:'Fill out before bedtime',sectionMorning:'Fill out in the morning',
       q1:(n,s)=>s?'How did you function during the day?':`How did ${n} function during the day?`,
-      q1Scale:['1 – Very good','2 – Good','3 – Moderate','4 – Poor','5 – Very poor'],
+      q1Scale:['1 – Very poor','2 – Poor','3 – Moderate','4 – Good','5 – Very good'],
       q2:(n,s)=>s?'Did you nap during the day?':`Did ${n} nap during the day?`,
       q2NapTimes:'Enter times and duration',
       q3:(n,s)=>s?'Medication (optional)':`Medication given to ${n} (optional)`,
@@ -1418,7 +1418,7 @@ create policy "Members manage entries" on sleep_entries
       ? `${line} L${pts.at(-1).x} ${pad.top + ch} L${pts[0].x} ${pad.top + ch} Z`
       : '';
 
-    const isGood  = isHigherBetter || metric === 'q1'; // q1 lower=better, invert dot coloring
+    const isGood  = isHigherBetter; // q1 higher=better (5=Svært bra)
     const lineClr = (metric === 'q10' || metric === 'q1') ? '#274d3a' : '#b8401e';
     const gradClr = lineClr;
     const gradId  = `g${metric.replace('_','')}`;
@@ -1443,7 +1443,7 @@ create policy "Members manage entries" on sleep_entries
     // Dots colored by value
     function dotColor(val) {
       if (metric === 'q10') return val >= 4 ? '#274d3a' : val === 3 ? '#8a7a5a' : '#b8401e';
-      if (metric === 'q1')  return val <= 2 ? '#274d3a' : val === 3 ? '#8a7a5a' : '#b8401e';
+      if (metric === 'q1')  return val >= 4 ? '#274d3a' : val === 3 ? '#8a7a5a' : '#b8401e';
       if (metric === 'sleep_onset') return val <= 15 ? '#274d3a' : val <= 30 ? '#8a7a5a' : '#b8401e';
       return val === 0 ? '#274d3a' : val <= 2 ? '#8a7a5a' : '#b8401e';
     }
@@ -1500,8 +1500,8 @@ create policy "Members manage entries" on sleep_entries
       const a1 = vals.slice(0,h).reduce((a,b)=>a+b,0)/h;
       const a2 = vals.slice(-h).reduce((a,b)=>a+b,0)/h;
       const d  = a2 - a1;
-      const higherIsBetter = metric === 'q10';
-      const lowerIsBetter  = metric !== 'q10';
+      const higherIsBetter = metric === 'q10' || metric === 'q1';
+      const lowerIsBetter  = metric !== 'q10' && metric !== 'q1';
       if (Math.abs(d) > 0.25) {
         const improving = higherIsBetter ? d > 0 : d < 0;
         trend = improving ? '↑' : '↓';
