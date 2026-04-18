@@ -142,15 +142,34 @@
     });
   });
 
+  function cacheKey(suffix) { return `sovn-cache-${suffix}`; }
+  function readCache(key) { try { return JSON.parse(localStorage.getItem(cacheKey(key))); } catch { return null; } }
+  function writeCache(key, val) { try { localStorage.setItem(cacheKey(key), JSON.stringify(val)); } catch {} }
+
   async function bootstrap() {
+    // Show cached data immediately for instant LCP
+    const cachedChildren = readCache('children');
+    const lastId = localStorage.getItem('sovn-last-child');
+    if (cachedChildren?.length) {
+      children = cachedChildren;
+      currentChild = children.find(c => c.id === lastId) || children[0];
+      const cachedEntries = readCache(`entries-${currentChild.id}`);
+      if (cachedEntries) {
+        entries = cachedEntries;
+        setTodayDate(); renderLang(); renderUserAvatar();
+        showScreen('app'); renderPersonSwitcher(); switchTab('new');
+      }
+    }
+
+    // Fetch fresh data in background (or foreground if no cache)
     try { children = await loadChildren(); }
     catch (err) {
       const el = document.getElementById('loading-error');
       if (el) { el.textContent = 'Kunne ikke koble til databasen. (' + err.message + ')'; el.classList.remove('hidden'); }
       return;
     }
+    writeCache('children', children);
     if (children.length === 0) { renderLang(); renderUserAvatar(); showScreen('children'); return; }
-    const lastId = localStorage.getItem('sovn-last-child');
     currentChild = children.find(c => c.id === lastId) || children[0];
     await loadEntries(); setTodayDate(); renderLang(); renderUserAvatar();
     showScreen('app'); renderPersonSwitcher(); switchTab('new');
@@ -360,6 +379,7 @@
     if (!currentChild) return;
     const { data } = await sb.from('sleep_entries').select('*').eq('child_id', currentChild.id).order('date', { ascending: false });
     entries = data || [];
+    writeCache(`entries-${currentChild.id}`, entries);
   }
   async function handleSaveEntry(e) {
     e.preventDefault();
