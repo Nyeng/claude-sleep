@@ -754,7 +754,7 @@ create policy "Members manage entries" on sleep_entries
   let currentChartPeriod  = 14;
   const expandedEntries   = new Set();
 
-  function isSelf() { return currentChild && currentChild.id === localStorage.getItem('sovn-self-id'); }
+  function isSelf() { return !!(currentChild && currentChild.is_self); }
   function getChildName() {
     if (isSelf()) return lang === 'no' ? 'du' : 'you';
     return currentChild?.name || (lang === 'no' ? 'barnet' : 'the child');
@@ -799,6 +799,7 @@ create policy "Members manage entries" on sleep_entries
       shareCodeHintSelf:'Del koden med legen eller noen du vil gi tilgang',copyCode:'Kopier',
       addChildBtn:'+ Legg til person',thisChild:'Dette barnet',thisChildSelf:'Deg selv',
       backLink:'← Tilbake',switchChild:'Bytt',signOutSmall:'Logg ut',childrenSection:'Personer',
+      typeMyself:'Meg selv',typeChild:'Barn',setAsSelf:'Marker som meg selv',setAsChild:'Marker som barn',
       removeAccess:'Fjern',removeConfirm:(name)=>`Fjerne "${name}" fra listen din? Du mister tilgang til dagboken, men registreringene beholdes.`,removeError:'Kunne ikke fjerne. Prøv igjen.',
       removeMemberConfirm:(name)=>`Fjerne ${name} sin tilgang? De vil ikke lenger kunne se eller registrere søvn for dette barnet.`,removeMemberError:'Kunne ikke fjerne tilgangen. Prøv igjen.',membersLabel:'Foresatte med tilgang',
       createSelf:'Registrer min søvn',createSelfDesc:'Logg din egen søvn – for deg selv',
@@ -842,6 +843,7 @@ create policy "Members manage entries" on sleep_entries
       shareCodeHintSelf:'Share with your doctor or someone you want to give access',copyCode:'Copy',
       addChildBtn:'+ Add person',thisChild:'This child',thisChildSelf:'Yourself',
       backLink:'← Back',switchChild:'Switch',signOutSmall:'Sign out',childrenSection:'People',
+      typeMyself:'Myself',typeChild:'Child',setAsSelf:'Mark as myself',setAsChild:'Mark as child',
       removeAccess:'Remove',removeConfirm:(name)=>`Remove "${name}" from your list? You'll lose access to the diary, but entries are kept.`,removeError:'Could not remove. Please try again.',
       removeMemberConfirm:(name)=>`Remove ${name}'s access? They will no longer be able to view or log sleep for this child.`,removeMemberError:'Could not remove access. Please try again.',membersLabel:'People with access',
       createSelf:'Track my own sleep',createSelfDesc:'Log your own sleep — for yourself',
@@ -878,8 +880,6 @@ create policy "Members manage entries" on sleep_entries
       return;
     }
     if (children.length === 0) { renderLang(); renderUserAvatar(); showScreen('children'); return; }
-    const metaSelfId = user?.user_metadata?.sovn_self_id;
-    if (metaSelfId && !localStorage.getItem('sovn-self-id')) localStorage.setItem('sovn-self-id', metaSelfId);
     const lastId = localStorage.getItem('sovn-last-child');
     currentChild = children.find(c => c.id === lastId) || children[0];
     await loadEntries(); setTodayDate(); renderLang(); renderUserAvatar();
@@ -948,7 +948,7 @@ create policy "Members manage entries" on sleep_entries
     for (let i = 0; i < 6; i++) code += c[Math.floor(Math.random() * c.length)]; return code;
   }
   async function loadChildren() {
-    const { data, error } = await sb.from('child_members').select('child_id, children(id, name, share_code)').eq('user_id', user.id);
+    const { data, error } = await sb.from('child_members').select('child_id, children(id, name, share_code, is_self)').eq('user_id', user.id);
     if (error) throw error;
     return (data || []).map(r => r.children).filter(Boolean);
   }
@@ -979,14 +979,14 @@ create policy "Members manage entries" on sleep_entries
     await selectChild(children[(idx + 1) % children.length]);
   }
   async function createSelf() {
-    const selfId = localStorage.getItem('sovn-self-id');
-    if (selfId) { const e = children.find(c => c.id === selfId); if (e) { await selectChild(e); return; } }
+    const existing = children.find(c => c.is_self);
+    if (existing) { await selectChild(existing); return; }
     const name = user?.user_metadata?.full_name || (lang === 'no' ? 'Meg selv' : 'Myself');
     const { data, error } = await sb.rpc('create_child', { child_name: name, child_share_code: generateShareCode() });
     if (error) { showFeedback('create-error', error.message, true); return; }
     const child = typeof data === 'string' ? JSON.parse(data) : data;
-    localStorage.setItem('sovn-self-id', child.id);
-    await sb.auth.updateUser({ data: { sovn_self_id: child.id } });
+    child.is_self = true;
+    await sb.from('children').update({ is_self: true }).eq('id', child.id);
     children.push(child); await selectChild(child);
   }
   function renderPersonSwitcher() {
@@ -1174,13 +1174,12 @@ create policy "Members manage entries" on sleep_entries
     const list    = document.getElementById('settings-children-list');
     if (!section || !list) return;
     section.classList.remove('hidden'); list.innerHTML = '';
-    const selfId = localStorage.getItem('sovn-self-id');
     children.forEach(child => {
       const row = document.createElement('div');
       row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;';
       const nameSpan = document.createElement('span');
       const isActive = child.id === currentChild?.id;
-      const isSelf   = child.id === selfId;
+      const isSelf   = !!child.is_self;
       const label = (isSelf ? '👤 ' : '') + (isSelf ? (lang === 'no' ? 'Meg selv' : 'Myself') : child.name);
       nameSpan.innerHTML = isActive
         ? `<span style="display:inline-flex;align-items:center;gap:7px;">${label}<span style="font-size:0.6rem;background:var(--green);color:#fff;font-family:'Syne',sans-serif;font-weight:800;letter-spacing:0.04em;text-transform:uppercase;padding:2px 7px;border-radius:99px;">${lang === 'no' ? 'Valgt' : 'Active'}</span></span>`
@@ -1191,9 +1190,17 @@ create policy "Members manage entries" on sleep_entries
       const actions = document.createElement('div');
       actions.style.cssText = 'display:flex;align-items:center;gap:6px;flex-shrink:0;';
 
+      const tx = t();
+      const typeBtn = document.createElement('button');
+      typeBtn.textContent = isSelf ? tx.typeMyself : tx.typeChild;
+      typeBtn.style.cssText = `font-family:"Syne",sans-serif;font-weight:700;font-size:0.625rem;letter-spacing:0.05em;text-transform:uppercase;padding:5px 10px;border-radius:6px;cursor:pointer;border:1px solid;transition:all 0.15s;background:transparent;${isSelf ? 'border-color:rgba(39,77,58,0.3);color:var(--green);' : 'border-color:var(--border);color:var(--text-3);'}`;
+      typeBtn.title = isSelf ? tx.setAsChild : tx.setAsSelf;
+      typeBtn.onclick = () => toggleSelfFlag(child);
+      actions.appendChild(typeBtn);
+
       if (!isActive && children.length > 1) {
         const switchBtn = document.createElement('button');
-        switchBtn.textContent = t().switchChild;
+        switchBtn.textContent = tx.switchChild;
         switchBtn.className = 'btn-ghost';
         switchBtn.style.cssText = 'font-size:0.625rem;padding:5px 10px;';
         switchBtn.onclick = () => selectChild(child);
@@ -1201,7 +1208,7 @@ create policy "Members manage entries" on sleep_entries
       }
 
       const removeBtn = document.createElement('button');
-      removeBtn.textContent = t().removeAccess;
+      removeBtn.textContent = tx.removeAccess;
       removeBtn.style.cssText = 'font-family:"Syne",sans-serif;font-weight:700;font-size:0.625rem;letter-spacing:0.05em;text-transform:uppercase;padding:5px 10px;border-radius:6px;cursor:pointer;border:1px solid rgba(184,64,30,0.25);background:transparent;color:var(--accent);transition:all 0.15s;';
       removeBtn.onmouseover = () => { removeBtn.style.background = 'var(--accent-soft)'; };
       removeBtn.onmouseout  = () => { removeBtn.style.background = 'transparent'; };
@@ -1219,10 +1226,22 @@ create policy "Members manage entries" on sleep_entries
     });
   }
 
+  async function toggleSelfFlag(child) {
+    const newVal = !child.is_self;
+    if (newVal) {
+      // unset any existing self
+      await sb.from('children').update({ is_self: false }).in('id', children.filter(c => c.is_self).map(c => c.id));
+      children.forEach(c => { c.is_self = false; });
+    }
+    await sb.from('children').update({ is_self: newVal }).eq('id', child.id);
+    child.is_self = newVal;
+    renderSettingsChildrenList();
+    renderLang();
+  }
+
   async function removeChild(child) {
     const tx = t();
-    const selfId = localStorage.getItem('sovn-self-id');
-    const isSelfEntry = child.id === selfId;
+    const isSelfEntry = !!child.is_self;
     const displayName = isSelfEntry ? (lang === 'no' ? 'Meg selv' : 'Myself') : child.name;
     if (!confirm(tx.removeConfirm(displayName))) return;
 
@@ -1233,7 +1252,6 @@ create policy "Members manage entries" on sleep_entries
 
     if (error) { alert(tx.removeError); return; }
 
-    if (isSelfEntry) localStorage.removeItem('sovn-self-id');
     children = children.filter(c => c.id !== child.id);
 
     if (children.length === 0) {
