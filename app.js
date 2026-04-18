@@ -161,17 +161,28 @@
       }
     }
 
-    // Fetch fresh data in background (or foreground if no cache)
-    try { children = await loadChildren(); }
-    catch (err) {
+    // Fire both queries in parallel — entries uses lastId as optimistic guess
+    let fetchedChildren, fetchError;
+    try {
+      [fetchedChildren] = await Promise.all([
+        loadChildren(),
+        lastId ? loadEntries(lastId) : Promise.resolve()
+      ]);
+    } catch (err) {
+      fetchError = err;
+    }
+    if (fetchError) {
       const el = document.getElementById('loading-error');
-      if (el) { el.textContent = 'Kunne ikke koble til databasen. (' + err.message + ')'; el.classList.remove('hidden'); }
+      if (el) { el.textContent = 'Kunne ikke koble til databasen. (' + fetchError.message + ')'; el.classList.remove('hidden'); }
       return;
     }
+    children = fetchedChildren;
     writeCache('children', children);
     if (children.length === 0) { renderLang(); renderUserAvatar(); showScreen('children'); return; }
     currentChild = children.find(c => c.id === lastId) || children[0];
-    await loadEntries(); setTodayDate(); renderLang(); renderUserAvatar();
+    // If lastId wasn't valid, load entries for the correct child
+    if (!lastId || currentChild.id !== lastId) await loadEntries();
+    setTodayDate(); renderLang(); renderUserAvatar();
     showScreen('app'); renderPersonSwitcher(); switchTab('new');
   }
 
@@ -375,11 +386,12 @@
   // ============================================================
   // ENTRIES
   // ============================================================
-  async function loadEntries() {
-    if (!currentChild) return;
-    const { data } = await sb.from('sleep_entries').select('*').eq('child_id', currentChild.id).order('date', { ascending: false });
+  async function loadEntries(childId) {
+    const id = childId || currentChild?.id;
+    if (!id) return;
+    const { data } = await sb.from('sleep_entries').select('*').eq('child_id', id).order('date', { ascending: false });
     entries = data || [];
-    writeCache(`entries-${currentChild.id}`, entries);
+    writeCache(`entries-${id}`, entries);
   }
   async function handleSaveEntry(e) {
     e.preventDefault();
