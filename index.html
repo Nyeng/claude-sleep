@@ -17,7 +17,7 @@
       --border:       #e0d8cc;
       --text-1:       #1c1712;
       --text-2:       #5c5248;
-      --text-3:       #9c8f84;
+      --text-3:       #6e6259;
       --accent:       #b8401e;
       --accent-soft:  rgba(184,64,30,0.08);
       --accent-hover: #9a3318;
@@ -476,7 +476,7 @@ create policy "Members manage entries" on sleep_entries
     <!-- Magic link form -->
     <div id="auth-magic-form">
       <div style="margin-bottom:10px;">
-        <input id="auth-email-input" type="email" autocomplete="email" class="field"
+        <input id="auth-email-input" type="email" autocomplete="email" class="field" aria-label="E-postadresse"
           style="width:100%;"
           oninput="document.getElementById('auth-magic-error').textContent=''"
         />
@@ -545,7 +545,7 @@ create policy "Members manage entries" on sleep_entries
     <!-- Create child -->
     <div class="card p-5 mb-3">
       <p id="create-child-heading" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.6875rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-2);margin-bottom:10px;"></p>
-      <input type="text" id="new-child-name" class="field" style="margin-bottom:10px;" />
+      <input type="text" id="new-child-name" class="field" style="margin-bottom:10px;" aria-labelledby="create-child-heading" />
       <button onclick="createChild()" class="btn-primary" id="btn-create-child"></button>
       <p id="create-error" class="hidden" style="font-size:0.8125rem;color:var(--accent);margin-top:6px;font-style:italic;"></p>
     </div>
@@ -553,7 +553,7 @@ create policy "Members manage entries" on sleep_entries
     <!-- Join with code -->
     <div class="card p-5">
       <p id="join-child-heading" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.6875rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-2);margin-bottom:10px;"></p>
-      <input type="text" id="join-code" maxlength="6" class="field" style="font-family:'Syne',sans-serif;font-weight:800;letter-spacing:0.25em;text-transform:uppercase;text-align:center;margin-bottom:10px;" oninput="this.value = this.value.toUpperCase()" />
+      <input type="text" id="join-code" maxlength="6" class="field" style="font-family:'Syne',sans-serif;font-weight:800;letter-spacing:0.25em;text-transform:uppercase;text-align:center;margin-bottom:10px;" oninput="this.value = this.value.toUpperCase()" aria-labelledby="join-child-heading" />
       <button onclick="joinChild()" class="btn-primary" id="btn-join-child"></button>
       <p id="join-error" class="hidden" style="font-size:0.8125rem;color:var(--accent);margin-top:6px;font-style:italic;"></p>
     </div>
@@ -622,12 +622,12 @@ create policy "Members manage entries" on sleep_entries
               </label>
             </div>
             <div id="nap-times-wrap" class="hidden">
-              <textarea id="nap-times" rows="2" class="field" style="resize:none;"></textarea>
+              <textarea id="nap-times" rows="2" class="field" style="resize:none;" aria-labelledby="label-q2"></textarea>
             </div>
           </div>
           <div>
             <label style="display:block;font-size:1.0625rem;font-weight:500;color:var(--text-1);margin-bottom:10px;font-style:italic;" id="label-q3"></label>
-            <input type="text" id="medication" class="field" />
+            <input type="text" id="medication" class="field" aria-labelledby="label-q3" />
           </div>
         </div>
 
@@ -642,39 +642,39 @@ create policy "Members manage entries" on sleep_entries
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
               <div>
                 <p class="ui-label" id="label-in-bed" style="margin-bottom:6px;"></p>
-                <input type="time" id="time-in-bed" class="field" />
+                <input type="time" id="time-in-bed" class="field" aria-labelledby="label-in-bed" />
               </div>
               <div>
                 <p class="ui-label" id="label-sleep-attempt" style="margin-bottom:6px;"></p>
-                <input type="time" id="time-sleep-attempt" class="field" />
+                <input type="time" id="time-sleep-attempt" class="field" aria-labelledby="label-sleep-attempt" />
               </div>
             </div>
           </div>
           <div>
             <label style="display:block;font-size:1.0625rem;font-weight:500;color:var(--text-1);margin-bottom:10px;font-style:italic;" id="label-q5"></label>
             <div style="display:flex;align-items:center;gap:10px;">
-              <input type="number" id="sleep-onset" min="0" max="999" class="field" style="width:80px;" />
+              <input type="number" id="sleep-onset" min="0" max="999" class="field" style="width:80px;" aria-labelledby="label-q5" />
               <span style="font-size:0.875rem;color:var(--text-3);font-style:italic;" id="label-minutes-1"></span>
             </div>
           </div>
           <div>
             <label style="display:block;font-size:1.0625rem;font-weight:500;color:var(--text-1);margin-bottom:10px;font-style:italic;" id="label-q6"></label>
-            <input type="number" id="awakenings-count" min="0" max="99" class="field" style="width:80px;" />
+            <input type="number" id="awakenings-count" min="0" max="99" class="field" style="width:80px;" aria-labelledby="label-q6" />
           </div>
           <div>
             <label style="display:block;font-size:1.0625rem;font-weight:500;color:var(--text-1);margin-bottom:10px;font-style:italic;" id="label-q7"></label>
             <div style="display:flex;align-items:center;gap:10px;">
-              <input type="number" id="wake-time" min="0" max="999" class="field" style="width:80px;" />
+              <input type="number" id="wake-time" min="0" max="999" class="field" style="width:80px;" aria-labelledby="label-q7" />
               <span style="font-size:0.875rem;color:var(--text-3);font-style:italic;" id="label-minutes-2"></span>
             </div>
           </div>
           <div>
             <label style="display:block;font-size:1.0625rem;font-weight:500;color:var(--text-1);margin-bottom:10px;font-style:italic;" id="label-q8"></label>
-            <input type="time" id="final-awakening" class="field" />
+            <input type="time" id="final-awakening" class="field" aria-labelledby="label-q8" />
           </div>
           <div>
             <label style="display:block;font-size:1.0625rem;font-weight:500;color:var(--text-1);margin-bottom:10px;font-style:italic;" id="label-q9"></label>
-            <input type="time" id="got-up" class="field" />
+            <input type="time" id="got-up" class="field" aria-labelledby="label-q9" />
           </div>
           <div>
             <label style="display:block;font-size:1.0625rem;font-weight:500;color:var(--text-1);margin-bottom:10px;font-style:italic;" id="label-q10"></label>
