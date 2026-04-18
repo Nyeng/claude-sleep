@@ -6,7 +6,21 @@
   <title>Søvndagbok</title>
   <link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.103.3/dist/umd/supabase.min.js">
   <link rel="preload" as="script" href="app.js">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net/">
   <link rel="preconnect" href="https://xdbveygpgzrxpowomdqi.supabase.co">
+  <script>
+    // Show auth screen immediately if no Supabase session in localStorage
+    // This makes FCP/LCP fire before any JS bundle loads
+    try {
+      const hasSession = Object.keys(localStorage).some(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+      if (!hasSession) {
+        document.addEventListener('DOMContentLoaded', () => {
+          document.getElementById('screen-loading').classList.add('hidden');
+          document.getElementById('screen-auth').classList.remove('hidden');
+        });
+      }
+    } catch(e) {}
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Syne:wght@500;600;700;800&display=swap">
@@ -438,6 +452,7 @@ create policy "Members manage entries" on sleep_entries
 <!-- ===== SCREEN: LOADING ===== -->
 <div id="screen-loading" class="fixed inset-0 flex items-center justify-center auth-bg">
   <div class="text-center">
+    <p style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.5rem;letter-spacing:0.04em;color:var(--text-1);margin-bottom:16px;">Søvndagbok</p>
     <div class="spinner mx-auto mb-3"></div>
     <p id="loading-error" class="hidden text-sm max-w-xs mt-2" style="color: var(--accent); font-style: italic;"></p>
   </div>
