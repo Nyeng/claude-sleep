@@ -8,7 +8,12 @@
   // CLIENT
   // ============================================================
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
-    auth: { flowType: 'implicit', detectSessionInUrl: true, persistSession: true }
+    auth: {
+      flowType: 'pkce',
+      detectSessionInUrl: true,
+      persistSession: true,
+      autoRefreshToken: true,
+    }
   });
 
   // ============================================================
