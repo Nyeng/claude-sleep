@@ -896,6 +896,11 @@ create policy "Members manage entries" on sleep_entries
       renderLang(); renderUserAvatar();
       const b = document.getElementById('children-back-link');
       if (b) b.classList.toggle('hidden', children.length === 0);
+      const hasSelf = children.some(c => c.is_self);
+      const selfCard = document.getElementById('card-create-self');
+      if (selfCard) selfCard.classList.toggle('hidden', hasSelf);
+      const orDivider = document.getElementById('label-or-child')?.parentElement;
+      if (orDivider) orDivider.classList.toggle('hidden', hasSelf);
     }
   }
 
