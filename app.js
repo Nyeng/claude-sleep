@@ -8,7 +8,12 @@
   // CLIENT
   // ============================================================
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
-    auth: { flowType: 'implicit', detectSessionInUrl: true, persistSession: true }
+    auth: {
+      flowType: 'pkce',
+      detectSessionInUrl: true,
+      persistSession: true,
+      autoRefreshToken: true,
+    }
   });
 
   // ============================================================
@@ -1030,7 +1035,9 @@
   // ============================================================
   function setTodayDate() {
     const t = new Date();
-    document.getElementById('entry-date').value = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+    const today = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+    document.getElementById('entry-date').value = today;
+    onDateChange(today);
   }
   function setText(id, text) { const el = document.getElementById(id); if (el) el.textContent = text; }
   function setAttr(id, attr, val) { const el = document.getElementById(id); if (el) el.setAttribute(attr, val); }
