@@ -1,0 +1,33 @@
+# Søvndagbok
+
+> En digital søvndagbok for registrering og oppfølging av søvn – for deg selv eller barnet ditt. Basert på søvndagbok fra Helse Bergen / NevSom.
+
+## Hva er Søvndagbok?
+
+Søvndagbok (sovndagbok.no) er en gratis norsk webapp for strukturert søvnlogging. Den er utviklet med utgangspunkt i den klinisk validerte søvndagboken fra Nasjonal kompetansetjeneste for søvnsykdommer (NevSom) ved Helse Bergen.
+
+Appen lar deg:
+- Registrere leggetid, innsovningstid, oppvåkninger og ståningstid
+- Logge dagtidsfungering og søvnkvalitet
+- Følge søvnutvikling over tid med grafer
+- Bruke dagboken for deg selv eller for barn
+- Dele tilgang med andre foresatte
+
+## Målgruppe
+
+- Voksne med søvnproblemer som ønsker strukturert søvnlogging
+- Foreldre som logger søvn for barn med søvnvansker
+- Helsepersonell som vil anbefale et digitalt verktøy til pasienter
+
+## Teknisk
+
+- Web-app: https://sovndagbok.no
+- Ingen app-installasjon nødvendig
+- Fungerer på mobil og desktop
+- Innlogging via Google eller e-post (magic link)
+- Data lagres sikkert i sky
+
+## Personvern
+
+- Personvernerklæring: https://sovndagbok.no/personvern.html
+- Data deles ikke med tredjeparter
