@@ -754,7 +754,7 @@ create policy "Members manage entries" on sleep_entries
   let currentChartPeriod  = 14;
   const expandedEntries   = new Set();
 
-  function isSelf() { return currentChild && currentChild.id === localStorage.getItem('sovn-self-id'); }
+  function isSelf() { return !!(currentChild && currentChild.is_self); }
   function getChildName() {
     if (isSelf()) return lang === 'no' ? 'du' : 'you';
     return currentChild?.name || (lang === 'no' ? 'barnet' : 'the child');
@@ -878,8 +878,6 @@ create policy "Members manage entries" on sleep_entries
       return;
     }
     if (children.length === 0) { renderLang(); renderUserAvatar(); showScreen('children'); return; }
-    const metaSelfId = user?.user_metadata?.sovn_self_id;
-    if (metaSelfId && !localStorage.getItem('sovn-self-id')) localStorage.setItem('sovn-self-id', metaSelfId);
     const lastId = localStorage.getItem('sovn-last-child');
     currentChild = children.find(c => c.id === lastId) || children[0];
     await loadEntries(); setTodayDate(); renderLang(); renderUserAvatar();
@@ -948,7 +946,7 @@ create policy "Members manage entries" on sleep_entries
     for (let i = 0; i < 6; i++) code += c[Math.floor(Math.random() * c.length)]; return code;
   }
   async function loadChildren() {
-    const { data, error } = await sb.from('child_members').select('child_id, children(id, name, share_code)').eq('user_id', user.id);
+    const { data, error } = await sb.from('child_members').select('child_id, children(id, name, share_code, is_self)').eq('user_id', user.id);
     if (error) throw error;
     return (data || []).map(r => r.children).filter(Boolean);
   }
@@ -979,14 +977,14 @@ create policy "Members manage entries" on sleep_entries
     await selectChild(children[(idx + 1) % children.length]);
   }
   async function createSelf() {
-    const selfId = localStorage.getItem('sovn-self-id');
-    if (selfId) { const e = children.find(c => c.id === selfId); if (e) { await selectChild(e); return; } }
+    const existing = children.find(c => c.is_self);
+    if (existing) { await selectChild(existing); return; }
     const name = user?.user_metadata?.full_name || (lang === 'no' ? 'Meg selv' : 'Myself');
     const { data, error } = await sb.rpc('create_child', { child_name: name, child_share_code: generateShareCode() });
     if (error) { showFeedback('create-error', error.message, true); return; }
     const child = typeof data === 'string' ? JSON.parse(data) : data;
-    localStorage.setItem('sovn-self-id', child.id);
-    await sb.auth.updateUser({ data: { sovn_self_id: child.id } });
+    child.is_self = true;
+    await sb.from('children').update({ is_self: true }).eq('id', child.id);
     children.push(child); await selectChild(child);
   }
   function renderPersonSwitcher() {
